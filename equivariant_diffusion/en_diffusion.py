@@ -736,7 +736,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Sample zs given the paramters derived from zt.
         zs = self.sample_normal(mu, sigma, node_mask, fix_noise)
 
-        # Project down to avoid numerical runaway of the center of gravity.
+        # Project down to avoid numerical runaway of the center of gravity. - ???
         zs = torch.cat(
             [diffusion_utils.remove_mean_with_mask(zs[:, :, :self.n_dims],
                                                    node_mask),

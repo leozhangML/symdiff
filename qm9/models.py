@@ -8,8 +8,8 @@ from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 
 
 def get_model(args, device, dataset_info, dataloader_train):
-    histogram = dataset_info['n_nodes']
-    in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)
+    histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366
+    in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
     nodes_dist = DistributionNodes(histogram)
 
     prop_dist = None
@@ -17,7 +17,7 @@ def get_model(args, device, dataset_info, dataloader_train):
         prop_dist = DistributionProperty(dataloader_train, args.conditioning)
 
     if args.condition_time:
-        dynamics_in_node_nf = in_node_nf + 1
+        dynamics_in_node_nf = in_node_nf + 1  # add time conditioning, use one dim for modelling charges
     else:
         print('Warning: dynamics model is _not_ conditioned on time.')
         dynamics_in_node_nf = in_node_nf
@@ -64,10 +64,10 @@ class DistributionNodes:
         self.n_nodes = []
         prob = []
         self.keys = {}
-        for i, nodes in enumerate(histogram):
+        for i, nodes in enumerate(histogram):  # nodes goes through keys  - i.e. 1 - 9
             self.n_nodes.append(nodes)
-            self.keys[nodes] = i
-            prob.append(histogram[nodes])
+            self.keys[nodes] = i  # stores pos index of nodes
+            prob.append(histogram[nodes])  # stores freq of nodes
         self.n_nodes = torch.tensor(self.n_nodes)
         prob = np.array(prob)
         prob = prob/np.sum(prob)
@@ -75,12 +75,12 @@ class DistributionNodes:
         self.prob = torch.from_numpy(prob).float()
 
         entropy = torch.sum(self.prob * torch.log(self.prob + 1e-30))
-        print("Entropy of n_nodes: H[N]", entropy.item())
+        print("Entropy of n_nodes: H[N]", entropy.item())  # to python scalar
 
-        self.m = Categorical(torch.tensor(prob))
+        self.m = Categorical(torch.tensor(prob))  # distribution over n_nodes
 
     def sample(self, n_samples=1):
-        idx = self.m.sample((n_samples,))
+        idx = self.m.sample((n_samples,))  # [n_samples]
         return self.n_nodes[idx]
 
     def log_prob(self, batch_n_nodes):
@@ -93,16 +93,16 @@ class DistributionNodes:
 
         log_p = log_p.to(batch_n_nodes.device)
 
-        log_probs = log_p[idcs]
+        log_probs = log_p[idcs]  # multiple for each instance?
 
         return log_probs
 
 
 class DistributionProperty:
-    def __init__(self, dataloader, properties, num_bins=1000, normalizer=None):
+    def __init__(self, dataloader, properties, num_bins=1000, normalizer=None):  # uses defaults for kwargs
         self.num_bins = num_bins
-        self.distributions = {}
-        self.properties = properties
+        self.distributions = {}  # over conditioning args
+        self.properties = properties  # from args - e.g.  homo | lumo | alpha | gap | mu | Cv
         for prop in properties:
             self.distributions[prop] = {}
             self._create_prob_dist(dataloader.dataset.data['num_atoms'],
@@ -120,7 +120,7 @@ class DistributionProperty:
             idxs = nodes_arr == n_nodes
             values_filtered = values[idxs]
             if len(values_filtered) > 0:
-                probs, params = self._create_prob_given_nodes(values_filtered)
+                probs, params = self._create_prob_given_nodes(values_filtered)  # for each prop and then n_nodes, set prob
                 distribution[n_nodes] = {'probs': probs, 'params': params}
 
     def _create_prob_given_nodes(self, values):
@@ -129,15 +129,15 @@ class DistributionProperty:
         prop_range = prop_max - prop_min + 1e-12
         histogram = torch.zeros(n_bins)
         for val in values:
-            i = int((val - prop_min)/prop_range * n_bins)
+            i = int((val - prop_min)/prop_range * n_bins)  # in [0, 1]
             # Because of numerical precision, one sample can fall in bin int(n_bins) instead of int(n_bins-1)
             # We move it to bin int(n_bind-1 if tat happens)
             if i == n_bins:
                 i = n_bins - 1
             histogram[i] += 1
         probs = histogram / torch.sum(histogram)
-        probs = Categorical(torch.tensor(probs))
-        params = [prop_min, prop_max]
+        probs = Categorical(torch.tensor(probs))  # over binned values that prop can take (given n_nodes)
+        params = [prop_min, prop_max]  # range of prob values (given_n_nodes)
         return probs, params
 
     def normalize_tensor(self, tensor, prop):
@@ -150,9 +150,9 @@ class DistributionProperty:
         vals = []
         for prop in self.properties:
             dist = self.distributions[prop][n_nodes]
-            idx = dist['probs'].sample((1,))
-            val = self._idx2value(idx, dist['params'], len(dist['probs'].probs))
-            val = self.normalize_tensor(val, prop)
+            idx = dist['probs'].sample((1,))  # in [0, 1]
+            val = self._idx2value(idx, dist['params'], len(dist['probs'].probs))  # returns back out the corresponding val
+            val = self.normalize_tensor(val, prop)  # ensures the normalised range for the prop
             vals.append(val)
         vals = torch.cat(vals)
         return vals
@@ -160,7 +160,7 @@ class DistributionProperty:
     def sample_batch(self, nodesxsample):
         vals = []
         for n_nodes in nodesxsample:
-            vals.append(self.sample(int(n_nodes)).unsqueeze(0))
+            vals.append(self.sample(int(n_nodes)).unsqueeze(0))  # kwarg??
         vals = torch.cat(vals, dim=0)
         return vals
 
@@ -168,7 +168,7 @@ class DistributionProperty:
         prop_range = params[1] - params[0]
         left = float(idx) / n_bins * prop_range + params[0]
         right = float(idx + 1) / n_bins * prop_range + params[0]
-        val = torch.rand(1) * (right - left) + left
+        val = torch.rand(1) * (right - left) + left  # sampling uniform in bin range
         return val
 
 

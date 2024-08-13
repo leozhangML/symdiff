@@ -117,7 +117,7 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
                     help='"sum" or "mean"')
 args = parser.parse_args()
 
-dataset_info = get_dataset_info(args.dataset, args.remove_h)
+dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
@@ -177,19 +177,20 @@ data_dummy = next(iter(dataloaders['train']))
 
 if len(args.conditioning) > 0:
     print(f'Conditioning on {args.conditioning}')
-    property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)
+    property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)  # compute mean, mad of each prop
     context_dummy = prepare_context(args.conditioning, data_dummy, property_norms)
-    context_node_nf = context_dummy.size(2)
+    context_node_nf = context_dummy.size(2)  # this is combined dim of all conditioning props
 else:
     context_node_nf = 0
     property_norms = None
 
-args.context_node_nf = context_node_nf
+args.context_node_nf = context_node_nf  # used where??
 
 
 # Create EGNN flow
+# vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
-if prop_dist is not None:
+if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 optim = get_optim(args, model)
@@ -207,7 +208,7 @@ def check_mask_correct(variables, node_mask):
 
 def main():
     if args.resume is not None:
-        flow_state_dict = torch.load(join(args.resume, 'flow.npy'))
+        flow_state_dict = torch.load(join(args.resume, 'flow.npy'))  # for vdm
         optim_state_dict = torch.load(join(args.resume, 'optim.npy'))
         model.load_state_dict(flow_state_dict)
         optim.load_state_dict(optim_state_dict)
@@ -226,7 +227,7 @@ def main():
         ema = flow_utils.EMA(args.ema_decay)
 
         if args.dp and torch.cuda.device_count() > 1:
-            model_ema_dp = torch.nn.DataParallel(model_ema)
+            model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
             model_ema_dp = model_ema
     else:
@@ -248,7 +249,7 @@ def main():
             if isinstance(model, en_diffusion.EnVariationalDiffusion):
                 wandb.log(model.log_info(), commit=True)
 
-            if not args.break_train_epoch:
+            if not args.break_train_epoch:  # for debug
                 analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
                                  dataset_info=dataset_info, device=device,
                                  prop_dist=prop_dist, n_samples=args.n_stability_samples)
