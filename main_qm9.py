@@ -123,7 +123,7 @@ atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
 # args, unparsed_args = parser.parse_known_args()
-args.wandb_usr = utils.get_wandb_username(args.wandb_usr)
+#args.wandb_usr = utils.get_wandb_username(args.wandb_usr)  - removed
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -178,7 +178,7 @@ data_dummy = next(iter(dataloaders['train']))
 if len(args.conditioning) > 0:
     print(f'Conditioning on {args.conditioning}')
     property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)  # compute mean, mad of each prop
-    context_dummy = prepare_context(args.conditioning, data_dummy, property_norms)
+    context_dummy = prepare_context(args.conditioning, data_dummy, property_norms)  # combines conditioning info into tensor
     context_node_nf = context_dummy.size(2)  # this is combined dim of all conditioning props
 else:
     context_node_nf = 0
@@ -196,7 +196,7 @@ model = model.to(device)
 optim = get_optim(args, model)
 # print(model)
 
-gradnorm_queue = utils.Queue()
+gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
 gradnorm_queue.add(3000)  # Add large value that will be flushed.
 
 
@@ -233,7 +233,7 @@ def main():
     else:
         ema = None
         model_ema = model
-        model_ema_dp = model_dp
+        model_ema_dp = model_dp  # how is this used?
 
     best_nll_val = 1e8
     best_nll_test = 1e8

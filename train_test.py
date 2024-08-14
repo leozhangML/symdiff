@@ -20,19 +20,19 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
     n_iterations = len(loader)
     for i, data in enumerate(loader):
         x = data['positions'].to(device, dtype)
-        node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)
-        edge_mask = data['edge_mask'].to(device, dtype)
-        one_hot = data['one_hot'].to(device, dtype)
-        charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)
+        node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
+        edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
+        one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
+        charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
 
-        x = remove_mean_with_mask(x, node_mask)
+        x = remove_mean_with_mask(x, node_mask)  # CoM-free - NOTE: change this
 
         if args.augment_noise > 0:
             # Add noise eps ~ N(0, augment_noise) around points.
             eps = sample_center_gravity_zero_gaussian_with_mask(x.size(), x.device, node_mask)
             x = x + eps * args.augment_noise
 
-        x = remove_mean_with_mask(x, node_mask)
+        x = remove_mean_with_mask(x, node_mask)  # applied twice?
         if args.data_augmentation:
             x = utils.random_rotation(x).detach()
 
@@ -42,7 +42,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         h = {'categorical': one_hot, 'integer': charges}
 
         if len(args.conditioning) > 0:
-            context = qm9utils.prepare_context(args.conditioning, data, property_norms).to(device, dtype)
+            context = qm9utils.prepare_context(args.conditioning, data, property_norms).to(device, dtype)  # [bs, n_nodes, context_node_nf]
             assert_correctly_masked(context, node_mask)
         else:
             context = None
@@ -51,13 +51,13 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
 
         # transform batch through flow
         nll, reg_term, mean_abs_z = losses.compute_loss_and_nll(args, model_dp, nodes_dist,
-                                                                x, h, node_mask, edge_mask, context)
+                                                                x, h, node_mask, edge_mask, context)  # reg_term, mean_abs_z is 0 but ode_reg=0.001?
         # standard nll from forward KL
         loss = nll + args.ode_regularization * reg_term
         loss.backward()
 
         if args.clip_grad:
-            grad_norm = utils.gradient_clipping(model, gradnorm_queue)
+            grad_norm = utils.gradient_clipping(model, gradnorm_queue)  # why grad_norm here instead of model_dp?
         else:
             grad_norm = 0.
 

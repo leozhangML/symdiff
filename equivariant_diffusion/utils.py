@@ -28,9 +28,9 @@ def remove_mean(x):
     return x
 
 
-def remove_mean_with_mask(x, node_mask):
+def remove_mean_with_mask(x, node_mask):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
     masked_max_abs_value = (x * (1 - node_mask)).abs().sum().item()
-    assert masked_max_abs_value < 1e-5, f'Error {masked_max_abs_value} too high'
+    assert masked_max_abs_value < 1e-5, f'Error {masked_max_abs_value} too high'  # checks for mistakes with masked positions - why?
     N = node_mask.sum(1, keepdims=True)
 
     mean = torch.sum(x, dim=1, keepdim=True) / N

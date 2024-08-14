@@ -6,7 +6,6 @@ import random
 import matplotlib
 import imageio
 
-
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from qm9 import bond_analyze
@@ -395,6 +394,7 @@ def visualize_chain_uncertainty(
 
 if __name__ == '__main__':
     #plot_grid()
+
     import qm9.dataset as dataset
     from configs.datasets_config import qm9_with_h, geom_with_h
     matplotlib.use('macosx')
