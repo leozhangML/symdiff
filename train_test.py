@@ -11,6 +11,8 @@ from qm9 import losses
 import time
 import torch
 
+from tqdm import tqdm
+
 
 def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim,
                 nodes_dist, gradnorm_queue, dataset_info, prop_dist):
@@ -18,7 +20,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
     model.train()
     nll_epoch = []
     n_iterations = len(loader)
-    for i, data in enumerate(loader):
+    for i, data in tqdm(enumerate(loader)):
         x = data['positions'].to(device, dtype)
         node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
         edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
