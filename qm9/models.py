@@ -8,9 +8,9 @@ from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 
 
 def get_model(args, device, dataset_info, dataloader_train):
-    histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366
+    histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366 etc.
     in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
-    nodes_dist = DistributionNodes(histogram)
+    nodes_dist = DistributionNodes(histogram)  # will sample over all nodes
 
     prop_dist = None
     if len(args.conditioning) > 0:

@@ -79,13 +79,16 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
             start = time.time()
             if len(args.conditioning) > 0:
                 save_and_sample_conditional(args, device, model_ema, prop_dist, dataset_info, epoch=epoch)
+            # saves 5 sampled molecules and 1 sampled chain to outputs (if stable)
+            # they use max_n_nodes (NOTE: no suitble for filtered atoms??)
             save_and_sample_chain(model_ema, args, device, dataset_info, prop_dist, epoch=epoch,
                                   batch_id=str(i))
             sample_different_sizes_and_save(model_ema, nodes_dist, args, device, dataset_info,
                                             prop_dist, epoch=epoch)
             print(f'Sampling took {time.time() - start:.2f} seconds')
-
-            vis.visualize(f"outputs/{args.exp_name}/epoch_{epoch}_{i}", dataset_info=dataset_info, wandb=wandb)
+            # visualise the molecules from .txt with argmax etc. - NOTE:see why this doesn't work
+            # NOTE: issue is that files are saved with 100_ instead of 100_1??
+            vis.visualize(f"outputs/{args.exp_name}/epoch_{epoch}_{i}/", dataset_info=dataset_info, wandb=wandb) 
             vis.visualize_chain(f"outputs/{args.exp_name}/epoch_{epoch}_{i}/chain/", dataset_info, wandb=wandb)
             if len(args.conditioning) > 0:
                 vis.visualize_chain("outputs/%s/epoch_%d/conditional/" % (args.exp_name, epoch), dataset_info,
@@ -142,7 +145,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                                                     node_mask, edge_mask, context)
             # standard nll from forward KL
 
-            nll_epoch += nll.item() * batch_size
+            nll_epoch += nll.item() * batch_size  # converts mean to sum
             n_samples += batch_size
             if i % args.n_report_steps == 0:
                 print(f"\r {partition} NLL \t epoch: {epoch}, iter: {i}/{n_iterations}, "
@@ -166,7 +169,7 @@ def sample_different_sizes_and_save(model, nodes_dist, args, device, dataset_inf
                                     n_samples=5, epoch=0, batch_size=100, batch_id=''):
     batch_size = min(batch_size, n_samples)
     for counter in range(int(n_samples/batch_size)):
-        nodesxsample = nodes_dist.sample(batch_size)
+        nodesxsample = nodes_dist.sample(batch_size)  # check with the filter
         one_hot, charges, x, node_mask = sample(args, device, model, prop_dist=prop_dist,
                                                 nodesxsample=nodesxsample,
                                                 dataset_info=dataset_info)

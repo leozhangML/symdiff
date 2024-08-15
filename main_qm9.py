@@ -20,6 +20,11 @@ import pickle
 from qm9.utils import prepare_context, compute_mean_mad
 from train_test import train_epoch, test, analyze_and_save
 
+import os
+print(f"os.getcwd(): {os.getcwd()}")
+
+#wandb.login(key="78d61cd721affd9ffa2f5e217ed6f49de71eb842")
+
 parser = argparse.ArgumentParser(description='E3Diffusion')
 parser.add_argument('--exp_name', type=str, default='debug_10')
 parser.add_argument('--model', type=str, default='egnn_dynamics',
@@ -75,6 +80,7 @@ parser.add_argument('--dataset', type=str, default='qm9',
                     help='qm9 | qm9_second_half (train only on the last 50K samples of the training dataset)')
 parser.add_argument('--datadir', type=str, default='qm9/temp',
                     help='qm9 directory')
+parser.add_argument('--force_download', type=bool, default=False, help='Whether to redownload qm9')  # LEO
 parser.add_argument('--filter_n_atoms', type=int, default=None,
                     help='When set to an integer value, QM9 will only contain molecules of that amount of atoms')
 parser.add_argument('--dequantization', type=str, default='argmax_variational',
@@ -164,7 +170,9 @@ if args.no_wandb:
     mode = 'disabled'
 else:
     mode = 'online' if args.online else 'offline'
-kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
+#kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
+#          'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
+kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
           'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
 wandb.init(**kwargs)
 wandb.save('*.txt')
@@ -189,6 +197,7 @@ args.context_node_nf = context_node_nf  # used where??
 
 # Create EGNN flow
 # vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
+# note that nodes_dist.sample is not filtered
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
 if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
@@ -247,13 +256,15 @@ def main():
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
         if epoch % args.test_epochs == 0:
-            if isinstance(model, en_diffusion.EnVariationalDiffusion):
-                wandb.log(model.log_info(), commit=True)
+            if isinstance(model, en_diffusion.EnVariationalDiffusion): 
+                wandb.log(model.log_info(), commit=True)  # should be constant for l2
 
             if not args.break_train_epoch:  # for debug
+                # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
                 analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
                                  dataset_info=dataset_info, device=device,
                                  prop_dist=prop_dist, n_samples=args.n_stability_samples)
+            # compute average nll over the val/test set
             nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
                            partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
                            property_norms=property_norms)
@@ -264,7 +275,7 @@ def main():
             if nll_val < best_nll_val:
                 best_nll_val = nll_val
                 best_nll_test = nll_test
-                if args.save_model:
+                if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
                     args.current_epoch = epoch + 1
                     utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
                     utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
@@ -273,6 +284,8 @@ def main():
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
+                # ???
+                """
                 if args.save_model:
                     utils.save_model(optim, 'outputs/%s/optim_%d.npy' % (args.exp_name, epoch))
                     utils.save_model(model, 'outputs/%s/generative_model_%d.npy' % (args.exp_name, epoch))
@@ -280,6 +293,7 @@ def main():
                         utils.save_model(model_ema, 'outputs/%s/generative_model_ema_%d.npy' % (args.exp_name, epoch))
                     with open('outputs/%s/args_%d.pickle' % (args.exp_name, epoch), 'wb') as f:
                         pickle.dump(args, f)
+                """
             print('Val loss: %.4f \t Test loss:  %.4f' % (nll_val, nll_test))
             print('Best val loss: %.4f \t Best test loss:  %.4f' % (best_nll_val, best_nll_test))
             wandb.log({"Val loss ": nll_val}, commit=True)

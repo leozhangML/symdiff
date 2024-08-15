@@ -174,9 +174,11 @@ def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0
     ax._axis3don = False
 
     if bg == 'black':
-        ax.w_xaxis.line.set_color("black")
+        #ax.w_xaxis.line.set_color("black")
+        ax.xaxis.line.set_color("black")
     else:
-        ax.w_xaxis.line.set_color("white")
+        #ax.w_xaxis.line.set_color("white")
+        ax.xaxis.line.set_color("white")
 
     plot_molecule(ax, positions, atom_type, alpha, spheres_3d,
                   hex_bg_color, dataset_info)
@@ -237,9 +239,11 @@ def plot_data3d_uncertainty(
     ax._axis3don = False
 
     if bg == 'black':
-        ax.w_xaxis.line.set_color("black")
+        #ax.w_xaxis.line.set_color("black")
+        ax.xaxis.line.set_color("black")
     else:
-        ax.w_xaxis.line.set_color("white")
+        #ax.w_xaxis.line.set_color("white")
+        ax.xaxis.line.set_color("white")
 
     for i in range(len(all_positions)):
         positions = all_positions[i]
