@@ -203,7 +203,7 @@ if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 optim = get_optim(args, model)
-# print(model)
+print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
 gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
 gradnorm_queue.add(3000)  # Add large value that will be flushed.

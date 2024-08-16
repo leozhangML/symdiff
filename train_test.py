@@ -180,11 +180,11 @@ def sample_different_sizes_and_save(model, nodes_dist, args, device, dataset_inf
 
 def analyze_and_save(epoch, model_sample, nodes_dist, args, device, dataset_info, prop_dist,
                      n_samples=1000, batch_size=100):
-    print(f'Analyzing molecule stability at epoch {epoch}...')
+    print(f'Analyzing molecule stability at epoch {epoch}... for {n_samples}')
     batch_size = min(batch_size, n_samples)
     assert n_samples % batch_size == 0
     molecules = {'one_hot': [], 'x': [], 'node_mask': []}
-    for i in range(int(n_samples/batch_size)):
+    for i in tqdm(range(int(n_samples/batch_size))):
         nodesxsample = nodes_dist.sample(batch_size)
         one_hot, charges, x, node_mask = sample(args, device, model_sample, dataset_info, prop_dist,
                                                 nodesxsample=nodesxsample)
