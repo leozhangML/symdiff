@@ -76,6 +76,31 @@ def generate_fourier_features(
     return per_t_features
 
 
+def invert_attention_mask(attention_mask: torch.Tensor, mode="enc") -> torch.Tensor:
+        """
+        We extend the mask to be compatible with [bs, num_heads, query_len, key_value_len]
+        attention_mask: [bs, n_nodes] of 0, 1
+
+        Note that it doesn't matter that the attention probs for the padding positions
+        will be uniform as these values are not used in loss
+        """
+        assert attention_mask.ndim == 2
+        if mode == "enc":
+            extended_attention_mask = attention_mask[:, None, None, :]
+        elif mode == "dec":
+            extended_attention_mask = attention_mask[:, None, :, None]
+        elif mode == "self_pad":
+            extended_attention_mask = torch.bmm(
+                attention_mask.unsqueeze(-1), 
+                attention_mask.unsqueeze(-2)
+                ).unsqueeze(1)  # for decoding_self_attention
+        else:
+            ValueError
+        extended_attention_mask = (1.0 - extended_attention_mask) * torch.finfo(attention_mask.dtype).min
+
+        return extended_attention_mask
+
+
 class SymDiffPerceiverConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`PerceiverModel`]. It is used to instantiate an
@@ -258,7 +283,7 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
     @property
     def num_channels(self) -> int:
         t_dim = t_emb_dim(self.config)
-        return self.dim + t_dim
+        return self.dim + t_dim + self.config.n_pad
 
     def forward(self, inputs, t, attention_mask):  # we append t to inputs features here via ff and config - NOTE: expand should be fine
         assert(inputs.shape[-1] == self.dim)
@@ -409,8 +434,9 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
 
         """Probably don't need subsampling or head mask"""
 
-        assert(enc_attention_mask.shape[:-1] == inputs.shape[:-1])  # assume shape [bs, n_nodes, 1]
-        assert(self.input_preprocessor is not None)
+        assert enc_attention_mask.ndim == 2
+        assert enc_attention_mask.shape == inputs.shape[:-1]  # assume shape [bs, n_nodes]
+        assert self.input_preprocessor is not None
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -424,12 +450,10 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
 
         batch_size = inputs.size()[0]
 
-        # Make the attention mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
-        extended_enc_attention_mask = self.invert_attention_mask(enc_attention_mask)
+        # Make the attention mask broadcastable to [batch_size, num_heads, query_len, key_value_len]
+        extended_enc_attention_mask = invert_attention_mask(enc_attention_mask, mode="enc")
         if dec_attention_mask is None:
-            extended_dec_attention_mask = extended_enc_attention_mask
-        else:
-            extended_dec_attention_mask = self.invert_attention_mask(dec_attention_mask)
+            dec_attention_mask = enc_attention_mask
 
         # Prepare head mask if needed
         # 1.0 in head_mask indicate we keep the head
@@ -461,7 +485,7 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
             decoder_outputs = self.decoder(
                 decoder_query,
                 z=sequence_output,
-                query_mask=extended_dec_attention_mask,  # input_mask and att_mask are the same for cross-att
+                query_mask=dec_attention_mask,  # input_mask and att_mask are the same for cross-att - NOTE: this is not extended
                 output_attentions=output_attentions,
             )
             logits = decoder_outputs.logits
@@ -605,7 +629,7 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
         self,
         query: torch.Tensor,
         z: torch.FloatTensor,
-        query_mask: Optional[torch.FloatTensor] = None,
+        query_mask: Optional[torch.FloatTensor] = None,  # NOTE: this is not extended
         output_attentions: Optional[bool] = False,
     ) -> PerceiverDecoderOutput:
         # Cross-attention decoding.
@@ -614,9 +638,11 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
         # Output -> B x M x K
         cross_attentions = () if output_attentions else None
 
+        extended_query_mask = invert_attention_mask(query_mask, mode="dec")
+
         layer_outputs = self.decoding_cross_attention(
             query,
-            attention_mask=query_mask,
+            attention_mask=extended_query_mask,
             head_mask=None,
             inputs=z,
             inputs_mask=None,  # equal to att-mask due to cross-att
@@ -628,9 +654,10 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
             cross_attentions = cross_attentions + (layer_outputs[1],)
 
         if self.decoder_self_attention:  # if using a second decoder block
+            extended_self_query_mask = invert_attention_mask(query_mask, mode="self_pad")
             layer_outputs = self.decoding_self_attention(
                 query,
-                attention_mask=query_mask,
+                attention_mask=extended_self_query_mask,
                 head_mask=None,
                 output_attentions=output_attentions,
             )

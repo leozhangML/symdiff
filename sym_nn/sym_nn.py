@@ -84,7 +84,10 @@ class SymDiff_dynamics(nn.Module):
         device: str = "cpu"
     ) -> None:
         
+        super().__init__()
+
         self.args = args
+
 
         self.gamma_config = SymDiffPerceiverConfig(
             num_latents=gamma_num_latents, d_latents=gamma_d_latents, n_pad=gamma_n_pad, 
@@ -109,8 +112,8 @@ class SymDiff_dynamics(nn.Module):
         self.t_dim = t_emb_dim(self.gamma_config)
         self.node_dim = n_dims + in_node_nf
 
-        self.gamma_input_preprocessor = TensorPreprocessor(n_dims, self.gamma_config)  # pos+t
-        self.k_input_preprocessor = TensorPreprocessor(self.node_dim+context_node_nf, self.k_config)  # pos+h_int+h_cat+context+t - i.e concat context to features
+        self.gamma_input_preprocessor = TensorPreprocessor(n_dims, self.gamma_config).to(device)  # pos+pad+t - want these to be even
+        self.k_input_preprocessor = TensorPreprocessor(self.node_dim+context_node_nf, self.k_config).to(device)  # pos+h_int+h_cat+context+pad+t - i.e concat context to features
 
         # query shape is preserved by default - hence final_project to output_num_channels
         self.gamma_decoder = SymDiffPerceiverDecoder(
@@ -118,7 +121,7 @@ class SymDiff_dynamics(nn.Module):
             output_num_channels=n_dims, index_dims=n_dims, num_heads=gamma_num_heads,
             final_project=True
         )
-        # we use the same trainable query params for each node position
+        # we use the same trainable query params for each node position (index_dims=-1)
         self.k_decoder = SymDiffPerceiverDecoder(
             self.k_config, pos_num_channels=k_pos_num_channels, 
             output_num_channels=self.node_dim, index_dims=-1, num_heads=k_num_heads,
@@ -135,7 +138,7 @@ class SymDiff_dynamics(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def _forward(self, t, xh, node_mask, edge_mask, context):  # computation for predicting noise - might need to change for 
+    def _forward(self, t, xh, node_mask, edge_mask, context):  # computation for predicting noise - might need to change for MiDi
         # xh: [bs, n_nodes, dims]
         # t: [bs, 1]
         # node_mask: [bs, n_nodes, 1]
@@ -150,27 +153,28 @@ class SymDiff_dynamics(nn.Module):
         g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
 
         # [bs, 3, 3]
-        gamma = torch.bmm(
-            self.gamma(g_inv_x, t, enc_attention_mask=node_mask, 
-                       dec_attention_mask=torch.ones(len(x), self.n_dims, device=self.device)),
-            g.transpose(2, 1)
-            )
+        gamma = self.gamma(g_inv_x, t, enc_attention_mask=node_mask.squeeze(-1), 
+                           dec_attention_mask=torch.ones(len(x), self.n_dims, device=self.device))[0]
+        gamma = torch.bmm(qr(gamma)[0], g.transpose(2, 1))
 
         gamma_inv_x = torch.bmm(x, gamma)
-        xh = torch.cat([gamma_inv_x, h], dim=-1)
+        if context is None:
+            xh = torch.cat([gamma_inv_x, h], dim=-1)
+        else:
+            xh = torch.cat([gamma_inv_x, h, context], dim=-1)
 
         # dec_attention_mask=node_mask is used as the query has the same sequence dim as n_node
         # [bs, n_nodes, dims]
-        xh = torch.bmm(
-            self.k(xh, t, enc_attention_mask=node_mask,
-                   dec_attention_mask=None),
-            gamma.transpose(2, 1)
-        )
+        xh = self.k(xh, t, enc_attention_mask=node_mask.squeeze(-1), dec_attention_mask=None)[0]
+        xh *= node_mask
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
 
         if self.args.com_free:
-            x = xh[:, :, :self.n_dims]
-            h = xh[:, :, self.n_dims:]
-            x = remove_mean_with_mask(x, node_mask)
-            xh = torch.cat([x, h], dim=-1)
+            x = remove_mean_with_mask(x, node_mask)  # k: U->U
+
+        gamma_x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([gamma_x, h], dim=-1)
 
         return xh
