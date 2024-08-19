@@ -255,7 +255,7 @@ class EnVariationalDiffusion(torch.nn.Module):
     """
     def __init__(
             self,
-            dynamics: models.EGNN_dynamics_QM9, in_node_nf: int, n_dims: int,
+            dynamics: torch.nn.Module, in_node_nf: int, n_dims: int,
             timesteps: int = 1000, parametrization='eps', noise_schedule='learned',
             noise_precision=1e-4, loss_type='vlb', norm_values=(1., 1., 1.),
             norm_biases=(None, 0., 0.), include_charges=True):
@@ -600,7 +600,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Sample zt ~ Normal(alpha_t x, sigma_t)
         eps = self.sample_combined_position_feature_noise(
-            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask)  # [bs, n_nodes, dims]
+            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask)  # [bs, n_nodes, dims] - masks out non-atom indexes
 
         # Concatenate x, h[integer] and h[categorical].
         xh = torch.cat([x, h['categorical'], h['integer']], dim=2)  # [bs, n_nodes, dims]
@@ -610,7 +610,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)  # NOTE
 
         # Neural net prediction.
-        net_out = self.phi(z_t, t, node_mask, edge_mask, context)
+        net_out = self.phi(z_t, t, node_mask, edge_mask, context)  # NOTE
 
         # Compute the error.
         error = self.compute_error(net_out, gamma_t, eps)  # NOTE: change for different parametrisation, [bs]

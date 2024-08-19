@@ -5,6 +5,7 @@ import numpy as np
 from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
+from sym_nn.sym_nn import SymDiff_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -22,13 +23,19 @@ def get_model(args, device, dataset_info, dataloader_train):
         print('Warning: dynamics model is _not_ conditioned on time.')
         dynamics_in_node_nf = in_node_nf
 
-    net_dynamics = EGNN_dynamics_QM9(
-        in_node_nf=dynamics_in_node_nf, context_node_nf=args.context_node_nf,
-        n_dims=3, device=device, hidden_nf=args.nf,
-        act_fn=torch.nn.SiLU(), n_layers=args.n_layers,
-        attention=args.attention, tanh=args.tanh, mode=args.model, norm_constant=args.norm_constant,
-        inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
-        normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method)
+    if args.model == "egnn_dynamics" or args.model == "gnn_dynamics":
+
+        net_dynamics = EGNN_dynamics_QM9(
+            in_node_nf=dynamics_in_node_nf, context_node_nf=args.context_node_nf,
+            n_dims=3, device=device, hidden_nf=args.nf,
+            act_fn=torch.nn.SiLU(), n_layers=args.n_layers,
+            attention=args.attention, tanh=args.tanh, mode=args.model, norm_constant=args.norm_constant,
+            inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
+            normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method)
+    
+    elif args.model == "symdiff_dynamics":
+
+        net_dynamics = SymDiff_dynamics()
 
     if args.probabilistic_model == 'diffusion':
         vdm = EnVariationalDiffusion(

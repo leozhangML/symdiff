@@ -121,15 +121,18 @@ parser.add_argument('--normalization_factor', type=float, default=1,
                     help="Normalize the sum aggregation of EGNN")
 parser.add_argument('--aggregation_method', type=str, default='sum',
                     help='"sum" or "mean"')
+
+# -------- sym_diff args -------- #
+
+parser.add_argument("--gamma_d_latents", type=int, default=64, help="gamma config")
+parser.add_argument("--gamma_num_latents", type=int, default=128, help="gamma_config")
+
 args = parser.parse_args()
 
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
-
-# args, unparsed_args = parser.parse_known_args()
-#args.wandb_usr = utils.get_wandb_username(args.wandb_usr)  - removed
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")

@@ -80,11 +80,12 @@ def transpose(x: torch.Tensor) -> torch.Tensor:
     return x.transpose(1, 2)
 
 
-def orthogonal_haar(x: torch.Tensor, dim: int) -> torch.Tensor:
+def orthogonal_haar(dim: int, target_tensor: torch.Tensor) -> torch.Tensor:
     """
     Implements the method of https://arxiv.org/pdf/math-ph/0609050v2.pdf
     (see (5.12) of that paper in particular)
     """
 
-    noise = torch.randn(x.shape[0], dim, dim, device=x.device)
+    noise = torch.randn(target_tensor.shape[0], dim, dim, 
+                        device=target_tensor.device)
     return qr(noise)[0]

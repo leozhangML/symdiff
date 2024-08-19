@@ -76,7 +76,7 @@ def generate_fourier_features(
     return per_t_features
 
 
-class EDMPerceiverConfig(PretrainedConfig):
+class SymDiffPerceiverConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`PerceiverModel`]. It is used to instantiate an
     Perceiver model according to the specified arguments, defining the model architecture. Instantiating a
@@ -227,7 +227,7 @@ class EDMPerceiverConfig(PretrainedConfig):
         self._label_trainable_num_channels = _label_trainable_num_channels
 
 
-def concat_t_emb(config: EDMPerceiverConfig, inputs: torch.FloatTensor, t: torch.FloatTensor):
+def concat_t_emb(config: SymDiffPerceiverConfig, inputs: torch.FloatTensor, t: torch.FloatTensor):
     bs, seq_len, _ = inputs.shape
     t_emb = generate_fourier_features(t, **config.__dict__)  # [bs, t_emb_dim]
     t_emb = torch.broadcast_to(
@@ -247,7 +247,7 @@ def t_emb_dim(config):
 
 class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context before this
 
-    def __init__(self, dim: int, config: EDMPerceiverConfig) -> None:
+    def __init__(self, dim: int, config: SymDiffPerceiverConfig) -> None:
         super().__init__()
         self.dim = dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
         self.config = config
@@ -263,7 +263,7 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
         return inputs, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
 
 
-class ConditionalEDMPerceiverPreprocessor(AbstractPreprocessor):
+class ConditionalSymDiffPerceiverPreprocessor(AbstractPreprocessor):
     """
     Multimodal preprocessing for Perceiver Encoder for molecular conditioning
 
@@ -353,7 +353,7 @@ class ConditionalEDMPerceiverPreprocessor(AbstractPreprocessor):
         return final_inputs, modality_sizes, enc_attention_masks
 
 
-class EDMPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decoder later
+class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decoder later
     def __init__(
         self,
         config,
@@ -487,7 +487,7 @@ class EDMPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decoder l
         )
 
 
-class EDMPerceiverDecoder(PerceiverAbstractDecoder):
+class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
     """
     Cross-attention-based decoder. This class can be used to decode the final hidden states of the latents using a
     cross-attention operation, in which the latents produce keys and values.
@@ -525,9 +525,9 @@ class EDMPerceiverDecoder(PerceiverAbstractDecoder):
 
     def __init__(
         self,
-        config: EDMPerceiverConfig,
+        config: SymDiffPerceiverConfig,
         pos_num_channels: int,
-        output_num_channels: int,
+        output_num_channels: int,  # used if final_project
         index_dims: int = -1,
         qk_channels: Optional[int] = None,
         v_channels: Optional[int] = None,
@@ -540,6 +540,7 @@ class EDMPerceiverDecoder(PerceiverAbstractDecoder):
         super().__init__()
 
         self.config = config
+        self.t_dim = t_emb_dim(self.config)
         self.pos_num_channels = pos_num_channels  # number of query channels before adding t_emb
         self.output_num_channels = output_num_channels  # final channel output of decoder if using final_layer
         self.index_dims = index_dims  # to output matrix or node positions
@@ -580,8 +581,7 @@ class EDMPerceiverDecoder(PerceiverAbstractDecoder):
     def num_query_channels(self) -> int:  # channel of final output
         #if self.final_project:
         #    return self.output_num_channels
-        t_dim = t_emb_dim(self.config)
-        return self.pos_num_channels + t_dim
+        return self.pos_num_channels + self.t_dim
 
     def decoder_query(self, inputs, t, modality_sizes=None):
         bs, seq_len, _ = inputs.shape
