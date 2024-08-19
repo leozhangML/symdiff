@@ -57,7 +57,8 @@ class SymDiff_dynamics(nn.Module):
         context_node_nf: int,
 
         gamma_num_latents: int, 
-        gamma_d_latents: int, 
+        gamma_d_latents: int,
+        gamma_n_pad: int,
         gamma_num_blocks: int, 
         gamma_num_self_attends_per_block: int, 
         gamma_num_self_attention_heads: int, 
@@ -67,6 +68,7 @@ class SymDiff_dynamics(nn.Module):
 
         k_num_latents: int,
         k_d_latents: int,
+        k_n_pad: int,
         k_num_blocks: int,
         k_num_self_attends_per_block: int,
         k_num_self_attention_heads: int,
@@ -77,40 +79,43 @@ class SymDiff_dynamics(nn.Module):
 
         num_bands: int, 
         max_resolution: float,
+        concat_t: bool = False,
+        n_dims: int = 3,
         device: str = "cpu"
     ) -> None:
         
         self.args = args
 
         self.gamma_config = SymDiffPerceiverConfig(
-            num_latents=gamma_num_latents, d_latents=gamma_d_latents, num_blocks=gamma_num_blocks, 
-            num_self_attends_per_block=gamma_num_self_attends_per_block, 
+            num_latents=gamma_num_latents, d_latents=gamma_d_latents, n_pad=gamma_n_pad, 
+            num_blocks=gamma_num_blocks, num_self_attends_per_block=gamma_num_self_attends_per_block, 
             num_self_attention_heads=gamma_num_self_attention_heads,
             num_cross_attention_heads=gamma_num_cross_attention_heads,
             attention_probs_dropout_prob=0.,
-            num_bands=num_bands, max_resolution=max_resolution
+            num_bands=num_bands, max_resolution=max_resolution, concat_t=concat_t
         )
         self.k_config = SymDiffPerceiverConfig(
-            num_latents=k_num_latents, d_latents=k_d_latents, num_blocks=k_num_blocks, 
-            num_self_attends_per_block=k_num_self_attends_per_block, 
-            num_cross_attention_heads=k_num_cross_attention_heads,
+            num_latents=k_num_latents, d_latents=k_d_latents, n_pad=k_n_pad, 
+            num_blocks=k_num_blocks, num_self_attends_per_block=k_num_self_attends_per_block, 
             num_self_attention_heads=k_num_self_attention_heads,
+            num_cross_attention_heads=k_num_cross_attention_heads,
             attention_probs_dropout_prob=0.,
-            num_bands=num_bands, max_resolution=max_resolution
+            num_bands=num_bands, max_resolution=max_resolution, concat_t=concat_t
         )
 
+        self.n_dims = n_dims
         self.in_node_nf = in_node_nf
         self.context_node_nf = context_node_nf
         self.t_dim = t_emb_dim(self.gamma_config)
-        self.node_dim = 3 + in_node_nf
+        self.node_dim = n_dims + in_node_nf
 
-        self.gamma_input_preprocessor = TensorPreprocessor(3, self.gamma_config)  # pos+t
+        self.gamma_input_preprocessor = TensorPreprocessor(n_dims, self.gamma_config)  # pos+t
         self.k_input_preprocessor = TensorPreprocessor(self.node_dim+context_node_nf, self.k_config)  # pos+h_int+h_cat+context+t - i.e concat context to features
 
         # query shape is preserved by default - hence final_project to output_num_channels
         self.gamma_decoder = SymDiffPerceiverDecoder(
             self.gamma_config, pos_num_channels=gamma_pos_num_channels,
-            output_num_channels=3, index_dims=3, num_heads=gamma_num_heads,
+            output_num_channels=n_dims, index_dims=n_dims, num_heads=gamma_num_heads,
             final_project=True
         )
         # we use the same trainable query params for each node position
@@ -137,9 +142,9 @@ class SymDiff_dynamics(nn.Module):
         # context: [bs, n_nodes, context_node_nf]
         # return [bs, n_nodes, dims]
         
-        x = xh[:, :, :3]
-        h = xh[:, :, 3:]
-        g = orthogonal_haar(dim=3, target_tensor=x)  # [bs, 3, 3]
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
         x = remove_mean_with_mask(x, node_mask)
         g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
@@ -147,19 +152,25 @@ class SymDiff_dynamics(nn.Module):
         # [bs, 3, 3]
         gamma = torch.bmm(
             self.gamma(g_inv_x, t, enc_attention_mask=node_mask, 
-                       dec_attention_mask=torch.ones(len(x), 3, device=self.device)),
+                       dec_attention_mask=torch.ones(len(x), self.n_dims, device=self.device)),
             g.transpose(2, 1)
             )
 
         gamma_inv_x = torch.bmm(x, gamma)
-        xh = torch.cat([gamma_inv_x, h], dim=2)
+        xh = torch.cat([gamma_inv_x, h], dim=-1)
 
         # dec_attention_mask=node_mask is used as the query has the same sequence dim as n_node
         # [bs, n_nodes, dims]
-        k_output = torch.bmm(
+        xh = torch.bmm(
             self.k(xh, t, enc_attention_mask=node_mask,
                    dec_attention_mask=None),
             gamma.transpose(2, 1)
         )
 
-        return k_output
+        if self.args.com_free:
+            x = xh[:, :, :self.n_dims]
+            h = xh[:, :, self.n_dims:]
+            x = remove_mean_with_mask(x, node_mask)
+            xh = torch.cat([x, h], dim=-1)
+
+        return xh

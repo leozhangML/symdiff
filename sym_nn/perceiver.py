@@ -146,13 +146,14 @@ class SymDiffPerceiverConfig(PretrainedConfig):
             Shape of the output (batch_size, num_frames, height, width) for the video decoder queries of the multimodal
             autoencoding model. This excludes the channel dimension.
     ```"""
-    model_type = "edm_perceiver"
+    model_type = "symdiff_perceiver"
 
     def __init__(
         self,
         num_latents=256,
         d_latents=1280,
         d_model=768,
+        n_pad=0,
         num_blocks=1,
         num_self_attends_per_block=26,
         num_self_attention_heads=8,
@@ -188,6 +189,7 @@ class SymDiffPerceiverConfig(PretrainedConfig):
         self.num_latents = num_latents
         self.d_latents = d_latents
         self.d_model = d_model
+        self.n_pad = n_pad  # when input dims is odd
         self.num_blocks = num_blocks
         self.num_self_attends_per_block = num_self_attends_per_block
         self.num_self_attention_heads = num_self_attention_heads
@@ -209,7 +211,6 @@ class SymDiffPerceiverConfig(PretrainedConfig):
         self.concat_t = concat_t
         self.max_resolution = max_resolution
         self.sine_only = sine_only
-
 
         # masked language modeling attributes
         self.vocab_size = vocab_size
@@ -251,6 +252,8 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
         super().__init__()
         self.dim = dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
         self.config = config
+        if config.n_pad > 0:
+            self.pad = nn.Parameter(torch.randn(1, config.n_pad))
 
     @property
     def num_channels(self) -> int:
@@ -259,6 +262,9 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
 
     def forward(self, inputs, t, attention_mask):  # we append t to inputs features here via ff and config - NOTE: expand should be fine
         assert(inputs.shape[-1] == self.dim)
+        if self.config.n_pad > 0:
+            bs, seq_len, _ = inputs.shape
+            inputs = torch.cat([inputs, self.pad.expand(bs, seq_len, -1)], dim=-1)
         inputs = concat_t_emb(self.config, inputs, t)
         return inputs, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
 
@@ -403,7 +409,7 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
 
         """Probably don't need subsampling or head mask"""
 
-        assert(enc_attention_mask.shape == inputs.shape[:-1])
+        assert(enc_attention_mask.shape[:-1] == inputs.shape[:-1])  # assume shape [bs, n_nodes, 1]
         assert(self.input_preprocessor is not None)
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
