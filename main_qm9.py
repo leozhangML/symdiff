@@ -124,8 +124,56 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
 
 # -------- sym_diff args -------- #
 
-parser.add_argument("--gamma_d_latents", type=int, default=64, help="gamma config")
-parser.add_argument("--gamma_num_latents", type=int, default=128, help="gamma_config")
+parser.add_argument("--com_free", type=bool, default=True, help="gamma config for perceiver")
+
+# -------- sym_diff perceiver args -------- #
+
+parser.add_argument("--gamma_num_latents", type=int, default=64, help="gamma config for perceiver")
+parser.add_argument("--gamma_d_latents", type=int, default=128, help="gamma config for perceiver")
+parser.add_argument("--gamma_n_pad", type=int, default=61, help="gamma config for perceiver")
+parser.add_argument("--gamma_num_blocks", type=int, default=1, help="gamma config for perceiver")
+parser.add_argument("--gamma_num_self_attends_per_block", type=int, default=3, help="gamma config for perceiver")
+parser.add_argument("--gamma_num_self_attention_heads", type=int, default=4, help="gamma config for perceiver")
+parser.add_argument("--gamma_num_cross_attention_heads", type=int, default=4, help="gamma config for perceiver")
+parser.add_argument("--gamma_attention_probs_dropout_prob", type=float, default=0.1, help="gamma config for perceiver")
+parser.add_argument("--gamma_pos_num_channels", type=int, default=64, help="gamma config for perceiver")
+parser.add_argument("--gamma_num_heads", type=int, default=4, help="gamma config for perceiver")
+
+parser.add_argument("--k_num_latents", type=int, default=128, help="k config for perceiver")
+parser.add_argument("--k_d_latents", type=int, default=256, help="k config for perceiver")
+parser.add_argument("--k_n_pad", type=int, default=55, help="k config for perceiver")
+parser.add_argument("--k_num_blocks", type=int, default=1, help="k config for perceiver")
+parser.add_argument("--k_num_self_attends_per_block", type=int, default=10, help="k config for perceiver")
+parser.add_argument("--k_num_self_attention_heads", type=int, default=4, help="k config for perceiver")
+parser.add_argument("--k_num_cross_attention_heads", type=int, default=4, help="k config for perceiver")
+parser.add_argument("--k_attention_probs_dropout_prob", type=float, default=0.1, help="k config for perceiver")
+parser.add_argument("--k_pos_num_channels", type=int, default=64, help="k config for perceiver")
+parser.add_argument("--k_num_heads", type=int, default=4, help="k config for perceiver")
+parser.add_argument("--k_decoder_self_attention", type=bool, default=True, help="k config for perceiver")
+parser.add_argument("--k_num_self_heads", type=int, default=4, help="k config for perceiver")
+
+# -------- sym_diff transformer args -------- #
+
+parser.add_argument("--gamma_num_enc_layers", type=int, default=2, help="gamma config for transformer")
+parser.add_argument("--gamma_num_dec_layers", type=int, default=2, help="gamma config for transformer")
+parser.add_argument("--gamma_d_model", type=int, default=128, help="gamma config for transformer")
+parser.add_argument("--gamma_nhead", type=int, default=4, help="gamma config for transformer")
+parser.add_argument("--gamma_dim_feedforward", type=int, default=256, help="gamma config for transformer")
+parser.add_argument("--gamma_dropout", type=float, default=0.1, help="gamma config for transformer")
+
+parser.add_argument("--k_num_layers", type=int, default=6, help="k config for transformer")
+parser.add_argument("--k_d_model", type=int, default=256, help="k config for transformer")
+parser.add_argument("--k_nhead", type=int, default=8, help="k config for transformer")
+parser.add_argument("--k_dim_feedforward", type=int, default=512, help="k config for transformer")
+parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for transformer")
+
+# -------- sym_diff time args -------- #
+
+parser.add_argument("--num_bands", type=int, default=32, help="fourier time embedding config")
+parser.add_argument("--max_resolution", type=float, default=100, help="fourier time embedding config")
+parser.add_argument("--concat_t", type=bool, default=False, help="fourier time embedding config")
+parser.add_argument("--t_fourier", type=bool, default=True, help="time config for transformer")
+
 
 args = parser.parse_args()
 
@@ -195,8 +243,7 @@ else:
     context_node_nf = 0
     property_norms = None
 
-args.context_node_nf = context_node_nf  # used where??
-
+args.context_node_nf = context_node_nf
 
 # Create EGNN flow
 # vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)

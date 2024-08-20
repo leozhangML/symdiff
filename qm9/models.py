@@ -5,7 +5,7 @@ import numpy as np
 from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
-from sym_nn.sym_nn import SymDiff_dynamics, SymDiffTransformer_dynamics
+from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -33,16 +33,16 @@ def get_model(args, device, dataset_info, dataloader_train):
             inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
             normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method)
     
-    elif args.model == "symdiff_dynamics":
+    elif args.model == "symdiff_perceiver_dynamics":
 
-        net_dynamics = SymDiff_dynamics(
+        net_dynamics = SymDiffPerceiver_dynamics(
             args,
             in_node_nf=in_node_nf,
             context_node_nf=args.context_node_nf,
 
             gamma_num_latents=args.gamma_num_latents, 
             gamma_d_latents=args.gamma_d_latents,
-            gamma_n_pad=args.gamma_d_latents,
+            gamma_n_pad=args.gamma_n_pad,
             gamma_num_blocks=args.gamma_num_blocks, 
             gamma_num_self_attends_per_block=args.gamma_num_self_attends_per_block, 
             gamma_num_self_attention_heads=args.gamma_num_self_attention_heads, 
@@ -71,7 +71,27 @@ def get_model(args, device, dataset_info, dataloader_train):
     elif args.model == "symdiff_transformer_dynamics":
 
         net_dynamics = SymDiffTransformer_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf, 
 
+            gamma_num_enc_layers=args.gamma_num_enc_layers,
+            gamma_num_dec_layers=args.gamma_num_dec_layers,
+            gamma_d_model=args.gamma_d_model, 
+            gamma_nhead=args.gamma_nhead,
+            gamma_dim_feedforward=args.gamma_dim_feedforward, 
+            gamma_dropout=args.gamma_dropout,
+
+            k_num_layers=args.k_num_layers,
+            k_d_model=args.k_d_model, 
+            k_nhead=args.k_nhead,
+            k_dim_feedforward=args.k_dim_feedforward, 
+            k_dropout=args.k_dropout,
+
+            num_bands=args.num_bands,
+            max_resolution=args.max_resolution,
+            t_fourier=args.t_fourier,
+            concat_t=args.concat_t,
         )
 
     if args.probabilistic_model == 'diffusion':

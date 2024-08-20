@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-#from equivariant_diffusion.utils import remove_mean_with_mask
+from equivariant_diffusion.utils import remove_mean_with_mask
 from utils import qr, orthogonal_haar
 from perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, t_emb_dim, concat_t_emb
 
-
+"""
 def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
     masked_max_abs_value = (x * (1 - node_mask)).abs().sum().item()
     assert masked_max_abs_value < 1e-5, f'Error {masked_max_abs_value} too high'  # checks for mistakes with masked positions - why?
@@ -18,6 +18,7 @@ def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3],
         return x, mean
     else:
         return x
+"""
 
 """
 # kv_dim is given by dim of input_preprocessor
@@ -60,7 +61,7 @@ decoder = SymDiffPerceiverDecoder(
 """
 
 
-class SymDiff_dynamics(nn.Module):
+class SymDiffPerceiver_dynamics(nn.Module):
 
     def __init__(
         self,
@@ -248,6 +249,7 @@ class SymDiffTransformer_dynamics(nn.Module):
         self.node_dim = n_dims + in_node_nf
 
         # define encoder-decoder and decoder-only transformer for gamma and k
+        # project input dims to d_model 
         self.gamma_linear_in = nn.Linear(n_dims+self.t_dim, gamma_d_model, device=device)
         self.gamma_linear_out = nn.Linear(gamma_d_model, n_dims, device=device)
         self.gamma_query = nn.Parameter(torch.randn(n_dims, gamma_d_model))
@@ -343,7 +345,7 @@ if __name__ == "__main__":
 
     args = Args()
 
-    model = SymDiff_dynamics(
+    model = SymDiffPerceiver_dynamics(
         args,
         in_node_nf=6,
         context_node_nf=0,
