@@ -47,10 +47,11 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 1 --exp_name test_no_h --n_stability_samples 1000 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 128 --n_layers 6 --lr 1e-4 --normalize_factors [1,4,10] \
-        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
-        --save_model True --filter_n_atoms 4
+#python main_qm9.py --n_epochs 1 --exp_name test_no_h --n_stability_samples 1000 --diffusion_noise_schedule polynomial_2 \
+#       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 128 --n_layers 6 --lr 1e-4 --normalize_factors [1,4,10] \
+#        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+#        --save_model True --filter_n_atoms 4
+python sym_nn/sym_nn.py
 date -u
 
 # script to run main.py

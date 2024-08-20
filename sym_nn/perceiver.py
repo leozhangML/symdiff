@@ -5,9 +5,10 @@ from torch import nn
 import numpy as np
 
 from transformers.configuration_utils import PretrainedConfig
-from transformers.models.perceiver.modeling_perceiver import AbstractPreprocessor, PerceiverPreTrainedModel, PerceiverAttention, \
-                                                             PerceiverEmbeddings, PerceiverEncoder, PerceiverModelOutput, PerceiverDecoderOutput, \
-                                                             PerceiverLayer, PerceiverAbstractDecoder, build_position_encoding
+from transformers.models.perceiver.modeling_perceiver import AbstractPreprocessor, PerceiverPreTrainedModel, \
+                                                             PerceiverEmbeddings, PerceiverEncoder, \
+                                                             PerceiverModelOutput, PerceiverDecoderOutput, \
+                                                             PerceiverLayer, PerceiverAbstractDecoder
 
 
 """NOTE: adapted from https://huggingface.co/docs/transformers/v4.44.0/en/model_doc/perceiver"""
@@ -76,10 +77,11 @@ def generate_fourier_features(
     return per_t_features
 
 
-def invert_attention_mask(attention_mask: torch.Tensor, mode="enc") -> torch.Tensor:
+def invert_attention_mask(attention_mask: torch.Tensor, mode="enc", extend=True) -> torch.Tensor:
         """
         We extend the mask to be compatible with [bs, num_heads, query_len, key_value_len]
-        attention_mask: [bs, n_nodes] of 0, 1
+
+        attention_mask: [bs, n_nodes] of 0s, 1s
 
         Note that it doesn't matter that the attention probs for the padding positions
         will be uniform as these values are not used in loss
@@ -96,8 +98,8 @@ def invert_attention_mask(attention_mask: torch.Tensor, mode="enc") -> torch.Ten
                 ).unsqueeze(1)  # for decoding_self_attention
         else:
             ValueError
-        extended_attention_mask = (1.0 - extended_attention_mask) * torch.finfo(attention_mask.dtype).min
-
+        if extend:
+            extended_attention_mask = (1.0 - extended_attention_mask) * torch.finfo(attention_mask.dtype).min
         return extended_attention_mask
 
 
@@ -237,7 +239,7 @@ class SymDiffPerceiverConfig(PretrainedConfig):
         self.max_resolution = max_resolution
         self.sine_only = sine_only
 
-        # masked language modeling attributes
+        # masked language modeling attributes - probably don't need these
         self.vocab_size = vocab_size
         self.max_position_embeddings = max_position_embeddings
         # image classification attributes
@@ -277,13 +279,13 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
         super().__init__()
         self.dim = dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
         self.config = config
+        self.t_dim = t_emb_dim(config)
         if config.n_pad > 0:
             self.pad = nn.Parameter(torch.randn(1, config.n_pad))
 
     @property
     def num_channels(self) -> int:
-        t_dim = t_emb_dim(self.config)
-        return self.dim + t_dim + self.config.n_pad
+        return self.dim + self.t_dim + self.config.n_pad
 
     def forward(self, inputs, t, attention_mask):  # we append t to inputs features here via ff and config - NOTE: expand should be fine
         assert(inputs.shape[-1] == self.dim)
@@ -565,7 +567,8 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
         widening_factor: Optional[int] = 1,
         use_query_residual: Optional[bool] = False,
         final_project: Optional[bool] = True,
-        decoder_self_attention: Optional[bool] = False
+        decoder_self_attention: Optional[bool] = False,
+        num_self_heads: Optional[int] = None
     ) -> None:
         super().__init__()
 
@@ -599,7 +602,7 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
             is_cross_attention=False,
             qk_channels=qk_channels,
             v_channels=v_channels,
-            num_heads=num_heads,
+            num_heads=num_self_heads,
             q_dim=self.num_query_channels,
             kv_dim=self.num_query_channels,
             widening_factor=widening_factor,

@@ -2,10 +2,22 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from equivariant_diffusion.utils import remove_mean_with_mask
-from sym_nn.utils import qr, orthogonal_haar
-from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, t_emb_dim
+#from equivariant_diffusion.utils import remove_mean_with_mask
+from utils import qr, orthogonal_haar
+from perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, t_emb_dim, concat_t_emb
 
+
+def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
+    masked_max_abs_value = (x * (1 - node_mask)).abs().sum().item()
+    assert masked_max_abs_value < 1e-5, f'Error {masked_max_abs_value} too high'  # checks for mistakes with masked positions - why?
+    N = node_mask.sum(1, keepdims=True)
+
+    mean = torch.sum(x, dim=1, keepdim=True) / N  # [bs, 1, 3]
+    x = x - mean * node_mask
+    if return_mean:
+        return x, mean
+    else:
+        return x
 
 """
 # kv_dim is given by dim of input_preprocessor
@@ -63,6 +75,7 @@ class SymDiff_dynamics(nn.Module):
         gamma_num_self_attends_per_block: int, 
         gamma_num_self_attention_heads: int, 
         gamma_num_cross_attention_heads: int,
+        gamma_attention_probs_dropout_prob: float,
         gamma_pos_num_channels: int,
         gamma_num_heads: int,
 
@@ -73,11 +86,13 @@ class SymDiff_dynamics(nn.Module):
         k_num_self_attends_per_block: int,
         k_num_self_attention_heads: int,
         k_num_cross_attention_heads: int,
+        k_attention_probs_dropout_prob: float,
         k_pos_num_channels: int,
         k_num_heads: int,
         k_decoder_self_attention: bool,
+        k_num_self_heads: int,
 
-        num_bands: int, 
+        num_bands: int,
         max_resolution: float,
         concat_t: bool = False,
         n_dims: int = 3,
@@ -88,13 +103,12 @@ class SymDiff_dynamics(nn.Module):
 
         self.args = args
 
-
         self.gamma_config = SymDiffPerceiverConfig(
             num_latents=gamma_num_latents, d_latents=gamma_d_latents, n_pad=gamma_n_pad, 
             num_blocks=gamma_num_blocks, num_self_attends_per_block=gamma_num_self_attends_per_block, 
             num_self_attention_heads=gamma_num_self_attention_heads,
             num_cross_attention_heads=gamma_num_cross_attention_heads,
-            attention_probs_dropout_prob=0.,
+            attention_probs_dropout_prob=gamma_attention_probs_dropout_prob,
             num_bands=num_bands, max_resolution=max_resolution, concat_t=concat_t
         )
         self.k_config = SymDiffPerceiverConfig(
@@ -102,7 +116,7 @@ class SymDiff_dynamics(nn.Module):
             num_blocks=k_num_blocks, num_self_attends_per_block=k_num_self_attends_per_block, 
             num_self_attention_heads=k_num_self_attention_heads,
             num_cross_attention_heads=k_num_cross_attention_heads,
-            attention_probs_dropout_prob=0.,
+            attention_probs_dropout_prob=k_attention_probs_dropout_prob,
             num_bands=num_bands, max_resolution=max_resolution, concat_t=concat_t
         )
 
@@ -112,8 +126,10 @@ class SymDiff_dynamics(nn.Module):
         self.t_dim = t_emb_dim(self.gamma_config)
         self.node_dim = n_dims + in_node_nf
 
-        self.gamma_input_preprocessor = TensorPreprocessor(n_dims, self.gamma_config).to(device)  # pos+pad+t - want these to be even
-        self.k_input_preprocessor = TensorPreprocessor(self.node_dim+context_node_nf, self.k_config).to(device)  # pos+h_int+h_cat+context+pad+t - i.e concat context to features
+        # pos+pad+t - want these to be even
+        self.gamma_input_preprocessor = TensorPreprocessor(n_dims, self.gamma_config).to(device)
+        # pos+h_int+h_cat+context+pad+t - i.e concat context to features
+        self.k_input_preprocessor = TensorPreprocessor(self.node_dim+context_node_nf, self.k_config).to(device)
 
         # query shape is preserved by default - hence final_project to output_num_channels
         self.gamma_decoder = SymDiffPerceiverDecoder(
@@ -125,7 +141,7 @@ class SymDiff_dynamics(nn.Module):
         self.k_decoder = SymDiffPerceiverDecoder(
             self.k_config, pos_num_channels=k_pos_num_channels, 
             output_num_channels=self.node_dim, index_dims=-1, num_heads=k_num_heads,
-            final_project=True, decoder_self_attention=k_decoder_self_attention
+            final_project=True, decoder_self_attention=k_decoder_self_attention, num_self_heads=k_num_self_heads
         )
 
         self.gamma = SymDiffPerceiver(self.gamma_config, decoder=self.gamma_decoder, 
@@ -144,7 +160,7 @@ class SymDiff_dynamics(nn.Module):
         # node_mask: [bs, n_nodes, 1]
         # context: [bs, n_nodes, context_node_nf]
         # return [bs, n_nodes, dims]
-        
+
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
@@ -152,7 +168,7 @@ class SymDiff_dynamics(nn.Module):
         x = remove_mean_with_mask(x, node_mask)
         g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
 
-        # [bs, 3, 3]
+        # [bs, 3, 3] - no noise in gamma
         gamma = self.gamma(g_inv_x, t, enc_attention_mask=node_mask.squeeze(-1), 
                            dec_attention_mask=torch.ones(len(x), self.n_dims, device=self.device))[0]
         gamma = torch.bmm(qr(gamma)[0], g.transpose(2, 1))
@@ -172,9 +188,233 @@ class SymDiff_dynamics(nn.Module):
         h = xh[:, :, self.n_dims:]
 
         if self.args.com_free:
-            x = remove_mean_with_mask(x, node_mask)  # k: U->U
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         gamma_x = torch.bmm(x, gamma.transpose(2, 1))
         xh = torch.cat([gamma_x, h], dim=-1)
 
         return xh
+
+
+class SymDiffTransformer_dynamics(nn.Module):
+
+    """Use torch.nn.transformer encoder here"""
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int, 
+
+        gamma_num_enc_layers: int,
+        gamma_num_dec_layers: int,
+        gamma_d_model: int, 
+        gamma_nhead: int,
+        gamma_dim_feedforward: int, 
+        gamma_dropout: float,
+
+        k_num_layers: int,
+        k_d_model: int, 
+        k_nhead: int,
+        k_dim_feedforward: int, 
+        k_dropout: float,
+
+        num_bands: int,
+        max_resolution: float,
+        t_fourier: bool = True,
+        concat_t: bool = False,
+
+        activation: str = "gelu", 
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+
+        super().__init__()
+
+        self.args = args
+
+        # whether to add t via fourier embeddings or concat
+        self.t_fourier = t_fourier
+        self.t_config = SymDiffPerceiverConfig(
+            num_bands=num_bands, max_resolution=max_resolution, 
+            concat_t=concat_t
+        )
+        self.t_dim = t_emb_dim(self.t_config) if t_fourier else 1
+
+        # dimensions of inputs
+        self.n_dims = n_dims
+        self.in_node_nf = in_node_nf
+        self.context_node_nf = context_node_nf
+        self.node_dim = n_dims + in_node_nf
+
+        # define encoder-decoder and decoder-only transformer for gamma and k
+        self.gamma_linear_in = nn.Linear(n_dims+self.t_dim, gamma_d_model, device=device)
+        self.gamma_linear_out = nn.Linear(gamma_d_model, n_dims, device=device)
+        self.gamma_query = nn.Parameter(torch.randn(n_dims, gamma_d_model))
+
+        self.k_linear_in = nn.Linear(self.node_dim+self.t_dim+context_node_nf, k_d_model, device=device)
+        self.k_linear_out = nn.Linear(k_d_model, self.node_dim, device=device)
+        self.k_encoder_layer = nn.TransformerEncoderLayer(
+            k_d_model, k_nhead, k_dim_feedforward, k_dropout, 
+            activation=activation, batch_first=True, norm_first=True, 
+            device=device
+        )
+
+        # need encoder-decoder for gamma as we need the shape [bs, 3, 3]
+        self.gamma = nn.Transformer(
+            d_model=gamma_d_model, nhead=gamma_nhead, num_encoder_layers=gamma_num_enc_layers, 
+            num_decoder_layers=gamma_num_dec_layers, dim_feedforward=gamma_dim_feedforward, 
+            dropout=gamma_dropout, activation="gelu", batch_first=True, 
+            norm_first=True, device=device
+        )
+        self.k = nn.TransformerEncoder(self.k_encoder_layer, k_num_layers)
+
+        self.device = device
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+
+        x = remove_mean_with_mask(x, node_mask)
+        g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
+
+        if self.t_fourier:
+            g_inv_x = concat_t_emb(self.t_config, g_inv_x, t)
+        else:
+            g_inv_x = torch.cat([g_inv_x, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+1]
+
+        g_inv_x = self.gamma_linear_in(g_inv_x)  # [bs, n_nodes, gamma_d_model]
+
+        # [bs, 3, 3] - no noise in gamma
+        gamma = self.gamma(
+            g_inv_x, self.gamma_query.expand(bs, self.n_dims, -1), 
+            src_key_padding_mask=node_mask.squeeze(-1), 
+            memory_key_padding_mask=node_mask.squeeze(-1)
+        )
+        gamma = qr(self.gamma_linear_out(gamma))[0]
+        gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        # compute k
+        gamma_inv_x = torch.bmm(x, gamma)
+        if context is None:
+            xh = torch.cat([gamma_inv_x, h], dim=-1)
+        else:
+            xh = torch.cat([gamma_inv_x, h, context], dim=-1)
+
+        if self.t_fourier:
+            xh = concat_t_emb(self.t_config, xh, t)
+        else:
+            xh = torch.cat([xh, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+in_node_nf+context_node_nf+1]
+
+        xh = self.k_linear_in(xh)
+        xh = self.k(xh, src_key_padding_mask=node_mask.squeeze(-1)) * node_mask
+        xh = self.k_linear_out(xh)
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        gamma_x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([gamma_x, h], dim=-1)
+
+        return xh
+
+if __name__ == "__main__":
+
+    # print parameter number
+
+    class Args:
+        def __init__(self) -> None:
+            self.com_free = True
+
+    args = Args()
+
+    model = SymDiff_dynamics(
+        args,
+        in_node_nf=6,
+        context_node_nf=0,
+
+        gamma_num_latents=64, 
+        gamma_d_latents=128,
+        gamma_n_pad=61,
+        gamma_num_blocks=2, 
+        gamma_num_self_attends_per_block=3, 
+        gamma_num_self_attention_heads=4, 
+        gamma_num_cross_attention_heads=4,
+        gamma_attention_probs_dropout_prob=0,
+        gamma_pos_num_channels=64,
+        gamma_num_heads=4,
+
+        k_num_latents=128,
+        k_d_latents=256,
+        k_n_pad=55,
+        k_num_blocks=1,
+        k_num_self_attends_per_block=10,
+        k_num_self_attention_heads=4,
+        k_num_cross_attention_heads=4,
+        k_attention_probs_dropout_prob=0,
+        k_pos_num_channels=64,
+        k_num_heads=4,
+        k_decoder_self_attention=True,
+        k_num_self_heads=4,
+        num_bands=32,
+        max_resolution=100,
+        concat_t=False,
+        device="cpu"
+    )
+
+    """
+    gamma params:  507264
+    k params:  4554752
+    total params:  5062016
+    """
+    print("symdiff_perceiver:")
+    print("gamma params: ", sum(p.numel() for p in model.gamma.parameters() if p.requires_grad))
+    print("k params: ", sum(p.numel() for p in model.k.parameters() if p.requires_grad))
+    print("total params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+    print(model._forward(torch.rand(2, 1), torch.randn(2, 5, 9), torch.ones(2, 5, 1), None, None).shape, "\n")
+
+    model = SymDiffTransformer_dynamics(
+        args,
+        in_node_nf=6,
+        context_node_nf=0, 
+
+        gamma_num_enc_layers=2,
+        gamma_num_dec_layers=2,
+        gamma_d_model=128, 
+        gamma_nhead=4,
+        gamma_dim_feedforward=128, 
+        gamma_dropout=0,
+
+        k_num_layers=4,
+        k_d_model=256, 
+        k_nhead=8,
+        k_dim_feedforward=256, 
+        k_dropout=0,
+
+        num_bands=64,
+        max_resolution=100,
+        t_fourier=True,
+        concat_t=False,
+    )
+
+    print("symdiff_transformer:")
+    print("gamma params: ", sum(p.numel() for p in model.gamma.parameters() if p.requires_grad))
+    print("k params: ", sum(p.numel() for p in model.k.parameters() if p.requires_grad))
+    print("total params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+    print(model._forward(torch.rand(2, 1), torch.randn(2, 5, 9), torch.ones(2, 5, 1), None, None).shape)
