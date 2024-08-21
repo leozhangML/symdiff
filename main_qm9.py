@@ -124,7 +124,9 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
 
 # -------- sym_diff args -------- #
 
-parser.add_argument("--com_free", type=bool, default=True, help="gamma config for perceiver")
+parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
+parser.add_argument("--com_free", type=bool, default=True, help="whether to use the CoM subspace")
+parser.add_argument("--augment_rotation", type=bool, default=False, help="whether to apply random rotations for training")
 
 # -------- sym_diff perceiver args -------- #
 
@@ -166,6 +168,11 @@ parser.add_argument("--k_d_model", type=int, default=256, help="k config for tra
 parser.add_argument("--k_nhead", type=int, default=8, help="k config for transformer")
 parser.add_argument("--k_dim_feedforward", type=int, default=512, help="k config for transformer")
 parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for transformer")
+
+# -------- sym_diff perceiver fourier args -------- #
+
+parser.add_argument("--sigma", type=float, default=100, help="config for perceiver fourier")
+parser.add_argument("--m", type=int, default=20, help="config for perceiver fourier")
 
 # -------- sym_diff time args -------- #
 

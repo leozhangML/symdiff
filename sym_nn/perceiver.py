@@ -49,7 +49,8 @@ def generate_fourier_features(
     num_bands: int, 
     max_resolution: float = 100, 
     concat_t: bool = True, 
-    sine_only: bool = False, 
+    sine_only: bool = False,
+    use_pos_embed: bool = False,
     **kwargs
     ) -> torch.FloatTensor:
 
@@ -61,7 +62,11 @@ def generate_fourier_features(
 
     min_freq = 1.0
     # Nyquist frequency at the target resolution:
-    freq_bands = torch.linspace(start=min_freq, end=max_resolution / 2, steps=num_bands)  # [num_bands]
+    if use_pos_embed:
+        j = torch.arange(num_bands, device=t.device)
+        freq_bands = 2 * max_resolution ** (j / num_bands)  # [num_bands] - when using positional embeddings to keep consistency of time embeddings
+    else:    
+        freq_bands = torch.linspace(start=min_freq, end=max_resolution / 2, steps=num_bands)  # [num_bands]
 
     # Get frequency bands for each spatial dimension.
     per_t_features = t * freq_bands[None, :]
@@ -69,7 +74,7 @@ def generate_fourier_features(
         per_t_features = torch.sin(np.pi * per_t_features)  # [bs, num_bands]
     else:
         per_t_features = torch.cat(
-            [torch.sin(np.pi * per_t_features), torch.cos(np.pi * per_t_features)], dim=-1  # [bs, 2*num_bands]
+            [torch.cos(np.pi * per_t_features), torch.sin(np.pi * per_t_features), ], dim=-1  # [bs, 2*num_bands]
         )
     # Concatenate the raw input positions.
     if concat_t:
@@ -195,10 +200,13 @@ class SymDiffPerceiverConfig(PretrainedConfig):
         initializer_range=0.02,
         layer_norm_eps=1e-12,
         use_query_residual=True,
+        
         num_bands=4,
         concat_t=False,
         max_resolution=100,
         sine_only=False,
+        use_pos_embed=False,
+
         vocab_size=262,
         max_position_embeddings=2048,
         image_size=56,
@@ -238,6 +246,7 @@ class SymDiffPerceiverConfig(PretrainedConfig):
         self.concat_t = concat_t
         self.max_resolution = max_resolution
         self.sine_only = sine_only
+        self.use_pos_embed = use_pos_embed
 
         # masked language modeling attributes - probably don't need these
         self.vocab_size = vocab_size
@@ -273,7 +282,36 @@ def t_emb_dim(config):
     return sine_only * num_bands + concat_t
 
 
-class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context before this
+@torch.jit.script
+def positional_encoding(
+        v: torch.Tensor,
+        sigma: float,
+        m: int) -> torch.Tensor:
+    r"""Computes :math:`\gamma(\mathbf{v}) = (\dots, \cos{2 \pi \sigma^{(j/m)} \mathbf{v}} , \sin{2 \pi \sigma^{(j/m)} \mathbf{v}}, \dots)`
+        where :math:`j \in \{0, \dots, m-1\}`
+
+        NOTE: from https://github.com/jmclong/random-fourier-features-pytorch/blob/main/rff/functional.py 
+
+    Args:
+        v (Tensor): input tensor of shape :math:`(N, *, \text{input_size})`
+        sigma (float): constant chosen based upon the domain of :attr:`v`
+        m (int): [description]
+
+    Returns:
+        Tensor: mapped tensor of shape :math:`(N, *, 2 \cdot m \cdot \text{input_size})`
+
+    See :class:`~rff.layers.PositionalEncoding` for more details.
+    """
+    j = torch.arange(m, device=v.device)
+    coeffs = 2 * np.pi * sigma ** (j / m)
+    vp = coeffs * torch.unsqueeze(v, -1)
+    vp_cat = torch.cat((torch.cos(vp), torch.sin(vp)), dim=-1)
+    return vp_cat.flatten(-2, -1)
+
+
+class TensorPreprocessor(AbstractPreprocessor):
+
+    """For using positional encodings for just time"""
 
     def __init__(self, dim: int, config: SymDiffPerceiverConfig) -> None:
         super().__init__()
@@ -293,6 +331,23 @@ class TensorPreprocessor(AbstractPreprocessor):  # NOTE: preprocess context befo
             bs, seq_len, _ = inputs.shape
             inputs = torch.cat([inputs, self.pad.expand(bs, seq_len, -1)], dim=-1)
         inputs = concat_t_emb(self.config, inputs, t)
+        return inputs, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
+
+
+class IdentityPreprocessor(AbstractPreprocessor):
+
+    """For using positional encodings for all positions - handle outside"""
+
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
+
+    @property
+    def num_channels(self) -> int:
+        return self.dim
+
+    def forward(self, inputs, t, attention_mask):  # handle position embeddings for inputs and t outside
+        assert(inputs.shape[-1] == self.dim)
         return inputs, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
 
 

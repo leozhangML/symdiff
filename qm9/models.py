@@ -5,7 +5,7 @@ import numpy as np
 from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
-from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics
+from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -66,6 +66,39 @@ def get_model(args, device, dataset_info, dataloader_train):
             num_bands=args.num_bands,
             max_resolution=args.max_resolution,
             concat_t=args.concat_t,
+            device=device)
+
+    elif args.model == "symdiff_perceiver_fourier_dynamics":
+
+        net_dynamics = SymDiffPerceiverFourier_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            gamma_num_latents=args.gamma_num_latents, 
+            gamma_d_latents=args.gamma_d_latents,
+            gamma_num_blocks=args.gamma_num_blocks, 
+            gamma_num_self_attends_per_block=args.gamma_num_self_attends_per_block, 
+            gamma_num_self_attention_heads=args.gamma_num_self_attention_heads, 
+            gamma_num_cross_attention_heads=args.gamma_num_cross_attention_heads,
+            gamma_attention_probs_dropout_prob=args.gamma_attention_probs_dropout_prob,
+            gamma_pos_num_channels=args.gamma_pos_num_channels,
+            gamma_num_heads=args.gamma_num_heads,
+
+            k_num_latents=args.k_num_latents,
+            k_d_latents=args.k_d_latents,
+            k_num_blocks=args.k_num_blocks,
+            k_num_self_attends_per_block=args.k_num_self_attends_per_block,
+            k_num_self_attention_heads=args.k_num_self_attention_heads,
+            k_num_cross_attention_heads=args.k_num_cross_attention_heads,
+            k_attention_probs_dropout_prob=args.k_attention_probs_dropout_prob,
+            k_pos_num_channels=args.k_pos_num_channels,
+            k_num_heads=args.k_num_heads,
+            k_decoder_self_attention=args.k_decoder_self_attention,
+            k_num_self_heads=args.k_num_self_heads,
+
+            sigma=args.sigma,
+            m=args.m,
             device=device)
 
     elif args.model == "symdiff_transformer_dynamics":
