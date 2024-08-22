@@ -6,7 +6,8 @@ import numpy as np
 from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
-from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, Transformer_dynamics
+from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, \
+                          Transformer_dynamics, DiT_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -151,7 +152,12 @@ def get_model(args, device, dataset_info, dataloader_train):
 
     elif args.model == "dit_dynamics":
 
-        net_dynamics = 
+        net_dynamics = DiT_dynamics(
+            args=args, in_node_nf=in_node_nf, context_node_nf=args.context_node_nf,
+            x_scale=args.x_scale, 
+            hidden_size=args.hidden_size, depth=args.depth, num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio, use_fused_attn=True
+        )
 
     if args.probabilistic_model == 'diffusion':
         vdm = EnVariationalDiffusion(

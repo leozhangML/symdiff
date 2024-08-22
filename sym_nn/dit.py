@@ -43,8 +43,8 @@ class Attention(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.use_fused_attn:
-            if att_mask.dtype == torch.float32:
-                att_mask = att_mask[:, None, None, :].bool()  # for keys
+            if attn_mask.dtype == torch.float32:
+                attn_mask = attn_mask[:, None, None, :].bool()  # for keys
             x = F.scaled_dot_product_attention(
                 q, k, v, attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.,
@@ -155,9 +155,9 @@ class DiTBlock(nn.Module):
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
 
-    def forward(self, x, c, att_mask):
+    def forward(self, x, c, attn_mask):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
-        x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), att_mask)
+        x = x + gate_msa.unsqueeze(1) * self.attn(modulate(self.norm1(x), shift_msa, scale_msa), attn_mask=attn_mask)
         x = x + gate_mlp.unsqueeze(1) * self.mlp(modulate(self.norm2(x), shift_mlp, scale_mlp))
         return x
 
@@ -236,7 +236,7 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, att_mask):
+    def forward(self, x, t, attn_mask):
         """
         Forward pass of DiT.
         x: (N, D)
@@ -246,7 +246,7 @@ class DiT(nn.Module):
         t = self.t_embedder(t)                   # (N, D)
         c = t                                    # (N, D)
         for block in self.blocks:
-            x = block(x, c, att_mask)            # (N, T, D)
+            x = block(x, c, attn_mask)            # (N, T, D)
         x = self.final_layer(x, c)               # (N, T, out_channels)
         return x
 

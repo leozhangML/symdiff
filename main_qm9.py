@@ -50,7 +50,7 @@ parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--use_amsgrad', type=bool, default=True)  # default from EDM
 parser.add_argument('--weight_decay', type=float, default=1e-12)  # default from EDM
 
-parser.add_argument('--scheduler', type=str, default="cosine")  # default from EDM
+parser.add_argument('--scheduler', type=str, default=None)  # default from EDM
 parser.add_argument('--num_warmup_steps', type=int, default=30000)  # default from EDM
 parser.add_argument('--num_training_steps', type=int, default=350000)  # default from EDM
 
@@ -191,6 +191,15 @@ parser.add_argument("--trans_d_model", type=int, default=256, help="config for t
 parser.add_argument("--trans_nhead", type=int, default=8, help="config for transformer")
 parser.add_argument("--trans_dim_feedforward", type=int, default=512, help="config for transformer")
 parser.add_argument("--trans_dropout", type=float, default=0., help="config for transformer")
+
+# -------- DiT args -------- #
+
+parser.add_argument("--out_channels", type=int, default=9, help="config for DiT")
+parser.add_argument("--x_scale", type=float, default=25.0, help="config for DiT")
+parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT")
+parser.add_argument("--depth", type=int, default=6, help="config for DiT")
+parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
+parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
 
 # -------- sym_diff time args -------- #
 

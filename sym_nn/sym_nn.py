@@ -6,7 +6,7 @@ from equivariant_diffusion.utils import remove_mean_with_mask, assert_mean_zero_
 from sym_nn.utils import qr, orthogonal_haar
 from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, \
                       t_emb_dim, concat_t_emb, positional_encoding, IdentityPreprocessor
-
+from sym_nn.dit import DiT
 
 """
 def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
@@ -613,6 +613,75 @@ class Transformer_dynamics(nn.Module):
 
         return xh
 
+
+class DiT_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        x_scale: float,
+        hidden_size: int,
+        depth: int,
+        num_heads: int,
+        mlp_ratio: float,
+        use_fused_attn: bool,
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        assert use_fused_attn
+
+        self.args = args
+        self.n_dims = n_dims
+
+        self.model = DiT(
+            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
+            hidden_size=hidden_size, depth=depth, 
+            num_heads=num_heads, mlp_ratio=mlp_ratio, 
+            use_fused_attn=use_fused_attn
+            )
+
+        self.device = device
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        bs, n_nodes, _ = xh.shape
+        print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+        print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        assert context is None
+        xh = torch.cat([x, h], dim=-1)
+
+        xh = self.model(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask
+        print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        xh = torch.cat([x, h], dim=-1)
+        print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        assert_correctly_masked(xh, node_mask)
+
+        return xh
 
 if __name__ == "__main__":
 
