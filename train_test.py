@@ -14,7 +14,7 @@ import torch
 from tqdm import tqdm
 
 
-def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim,
+def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim, scheduler,
                 nodes_dist, gradnorm_queue, dataset_info, prop_dist):
     model_dp.train()
     model.train()
@@ -27,7 +27,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
         charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
 
-        x = remove_mean_with_mask(x, node_mask)  # CoM-free - NOTE: change this
+        x = remove_mean_with_mask(x, node_mask)
 
         if args.augment_noise > 0:
             # Add noise eps ~ N(0, augment_noise) around points.
@@ -64,6 +64,9 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
             grad_norm = 0.
 
         optim.step()
+        if scheduler is not None:
+            wandb.log({"lr": optim.param_groups[0]["lr"]}, commit=True)
+            scheduler.step()
 
         # Update EMA if enabled.
         if args.ema_decay > 0:
@@ -96,7 +99,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         wandb.log({"Batch NLL": nll.item()}, commit=True)
         if args.break_train_epoch:
             break
-    wandb.log({"Train Epoch NLL": np.mean(nll_epoch)}, commit=False)
+    wandb.log({"Train Epoch NLL": np.mean(nll_epoch)}, commit=True)  # default is False?
 
 
 def check_mask_correct(variables, node_mask):
@@ -107,6 +110,7 @@ def check_mask_correct(variables, node_mask):
 
 def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_dist, partition='Test'):
     eval_model.eval()
+    print(f"{partition} at epoch {epoch}")
     with torch.no_grad():
         nll_epoch = 0
         n_samples = 0
@@ -181,24 +185,25 @@ def sample_different_sizes_and_save(model, nodes_dist, args, device, dataset_inf
 def analyze_and_save(epoch, model_sample, nodes_dist, args, device, dataset_info, prop_dist,
                      n_samples=1000, batch_size=100):
     print(f'Analyzing molecule stability at epoch {epoch}... for {n_samples}')
-    batch_size = min(batch_size, n_samples)
-    assert n_samples % batch_size == 0
-    molecules = {'one_hot': [], 'x': [], 'node_mask': []}
-    for i in tqdm(range(int(n_samples/batch_size))):
-        nodesxsample = nodes_dist.sample(batch_size)
-        one_hot, charges, x, node_mask = sample(args, device, model_sample, dataset_info, prop_dist,
+    with torch.no_grad():
+        batch_size = min(batch_size, n_samples)
+        assert n_samples % batch_size == 0
+        molecules = {'one_hot': [], 'x': [], 'node_mask': []}
+        for i in tqdm(range(int(n_samples/batch_size))):
+            nodesxsample = nodes_dist.sample(batch_size)
+            one_hot, charges, x, node_mask = sample(args, device, model_sample, dataset_info, prop_dist,
                                                 nodesxsample=nodesxsample)
 
-        molecules['one_hot'].append(one_hot.detach().cpu())
-        molecules['x'].append(x.detach().cpu())
-        molecules['node_mask'].append(node_mask.detach().cpu())
+            molecules['one_hot'].append(one_hot.detach().cpu())
+            molecules['x'].append(x.detach().cpu())
+            molecules['node_mask'].append(node_mask.detach().cpu())
 
-    molecules = {key: torch.cat(molecules[key], dim=0) for key in molecules}
-    validity_dict, rdkit_tuple = analyze_stability_for_molecules(molecules, dataset_info)
+        molecules = {key: torch.cat(molecules[key], dim=0) for key in molecules}
+        validity_dict, rdkit_tuple = analyze_stability_for_molecules(molecules, dataset_info)
 
-    wandb.log(validity_dict)
-    if rdkit_tuple is not None:
-        wandb.log({'Validity': rdkit_tuple[0][0], 'Uniqueness': rdkit_tuple[0][1], 'Novelty': rdkit_tuple[0][2]})
+        wandb.log(validity_dict)
+        if rdkit_tuple is not None:
+            wandb.log({'Validity': rdkit_tuple[0][0], 'Uniqueness': rdkit_tuple[0][1], 'Novelty': rdkit_tuple[0][2]})
     return validity_dict
 
 

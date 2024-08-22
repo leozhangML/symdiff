@@ -1,11 +1,12 @@
 import torch
 from torch.distributions.categorical import Categorical
+from transformers import get_cosine_schedule_with_warmup
 
 import numpy as np
 from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
-from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics
+from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, Transformer_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -125,7 +126,32 @@ def get_model(args, device, dataset_info, dataloader_train):
             max_resolution=args.max_resolution,
             t_fourier=args.t_fourier,
             concat_t=args.concat_t,
+            device=device
         )
+
+    elif args.model == "transformer_dynamics":
+
+        net_dynamics = Transformer_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf, 
+
+            trans_num_layers=args.trans_num_layers,
+            trans_d_model=args.trans_d_model,
+            trans_nhead=args.trans_nhead, 
+            trans_dim_feedforward=args.trans_dim_feedforward,
+            trans_dropout=args.trans_dropout, 
+
+            num_bands=args.num_bands,
+            max_resolution=args.max_resolution,
+            t_fourier=args.t_fourier,
+            concat_t=args.concat_t,
+            device=device
+        )
+
+    elif args.model == "dit_dynamics":
+
+        net_dynamics = 
 
     if args.probabilistic_model == 'diffusion':
         vdm = EnVariationalDiffusion(
@@ -149,10 +175,22 @@ def get_model(args, device, dataset_info, dataloader_train):
 def get_optim(args, generative_model):
     optim = torch.optim.AdamW(
         generative_model.parameters(),
-        lr=args.lr, amsgrad=True,
-        weight_decay=1e-12)
+        lr=args.lr, amsgrad=args.use_amsgrad,
+        weight_decay=args.weight_decay)
 
     return optim
+
+
+def get_scheduler(args, optim):
+    if args.scheduler == "cosine":
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer=optim,
+            num_warmup_steps=args.num_warmup_steps,
+            num_training_steps=args.num_training_steps
+        )
+    else:
+        scheduler = None
+    return scheduler
 
 
 class DistributionNodes:

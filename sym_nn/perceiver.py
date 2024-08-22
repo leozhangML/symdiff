@@ -66,7 +66,7 @@ def generate_fourier_features(
         j = torch.arange(num_bands, device=t.device)
         freq_bands = 2 * max_resolution ** (j / num_bands)  # [num_bands] - when using positional embeddings to keep consistency of time embeddings
     else:    
-        freq_bands = torch.linspace(start=min_freq, end=max_resolution / 2, steps=num_bands)  # [num_bands]
+        freq_bands = torch.linspace(start=min_freq, end=max_resolution / 2, steps=num_bands, device=t.device)  # [num_bands]
 
     # Get frequency bands for each spatial dimension.
     per_t_features = t * freq_bands[None, :]

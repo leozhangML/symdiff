@@ -10,7 +10,7 @@ import wandb
 from configs.datasets_config import get_dataset_info
 from os.path import join
 from qm9 import dataset
-from qm9.models import get_optim, get_model
+from qm9.models import get_optim, get_scheduler, get_model
 from equivariant_diffusion import en_diffusion
 from equivariant_diffusion.utils import assert_correctly_masked
 from equivariant_diffusion import utils as flow_utils
@@ -42,9 +42,18 @@ parser.add_argument('--diffusion_noise_precision', type=float, default=1e-5,
 parser.add_argument('--diffusion_loss_type', type=str, default='l2',
                     help='vlb, l2')
 
+# -------- optimiser args -------- #
+
 parser.add_argument('--n_epochs', type=int, default=200)
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--lr', type=float, default=2e-4)
+parser.add_argument('--use_amsgrad', type=bool, default=True)  # default from EDM
+parser.add_argument('--weight_decay', type=float, default=1e-12)  # default from EDM
+
+parser.add_argument('--scheduler', type=str, default="cosine")  # default from EDM
+parser.add_argument('--num_warmup_steps', type=int, default=30000)  # default from EDM
+parser.add_argument('--num_training_steps', type=int, default=350000)  # default from EDM
+
 parser.add_argument('--brute_force', type=eval, default=False,
                     help='True | False')
 parser.add_argument('--actnorm', type=eval, default=True,
@@ -59,6 +68,7 @@ parser.add_argument('--clip_grad', type=eval, default=True,
                     help='True | False')
 parser.add_argument('--trace', type=str, default='hutch',
                     help='hutch | exact')
+
 # EGNN args -->
 parser.add_argument('--n_layers', type=int, default=6,
                     help='number of layers')
@@ -174,6 +184,14 @@ parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for t
 parser.add_argument("--sigma", type=float, default=100, help="config for perceiver fourier")
 parser.add_argument("--m", type=int, default=20, help="config for perceiver fourier")
 
+# -------- transformer args -------- #
+
+parser.add_argument("--trans_num_layers", type=int, default=6, help="config for transformer")
+parser.add_argument("--trans_d_model", type=int, default=256, help="config for transformer")
+parser.add_argument("--trans_nhead", type=int, default=8, help="config for transformer")
+parser.add_argument("--trans_dim_feedforward", type=int, default=512, help="config for transformer")
+parser.add_argument("--trans_dropout", type=float, default=0., help="config for transformer")
+
 # -------- sym_diff time args -------- #
 
 parser.add_argument("--num_bands", type=int, default=32, help="fourier time embedding config")
@@ -260,6 +278,7 @@ if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 optim = get_optim(args, model)
+scheduler = get_scheduler(args, optim)
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
 gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
@@ -276,8 +295,10 @@ def main():
     if args.resume is not None:
         flow_state_dict = torch.load(join(args.resume, 'flow.npy'))  # for vdm
         optim_state_dict = torch.load(join(args.resume, 'optim.npy'))
+        scheduler_state_dict = torch.load(join(args.resume, 'scheduler.npy'))
         model.load_state_dict(flow_state_dict)
         optim.load_state_dict(optim_state_dict)
+        scheduler.load_state_dict(scheduler_state_dict)
 
     # Initialize dataparallel if enabled and possible.
     if args.dp and torch.cuda.device_count() > 1:
@@ -303,19 +324,26 @@ def main():
 
     best_nll_val = 1e8
     best_nll_test = 1e8
+
     for epoch in range(args.start_epoch, args.n_epochs):
+        wandb.log({"Epoch": epoch}, commit=True)
         print(f"--- Epoch {epoch} ---")
+
+        #print("TEST WITH VAL FIRST")
+        #nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model,
+        #           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
+        #           property_norms=property_norms)
+
         start_epoch = time.time()
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
                     nodes_dist=nodes_dist, dataset_info=dataset_info,
-                    gradnorm_queue=gradnorm_queue, optim=optim, prop_dist=prop_dist)
+                    gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
-        if epoch % args.test_epochs == 0:
+        if epoch % args.test_epochs == 0 and epoch != 0:
             if isinstance(model, en_diffusion.EnVariationalDiffusion): 
                 wandb.log(model.log_info(), commit=True)  # should be constant for l2
-
             if not args.break_train_epoch:  # for debug
                 # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
                 analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
@@ -336,6 +364,8 @@ def main():
                     args.current_epoch = epoch + 1
                     utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
                     utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
+                    if scheduler is not None:
+                        utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
                     if args.ema_decay > 0:
                         utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:

@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-#from equivariant_diffusion.utils import remove_mean_with_mask
-from utils import qr, orthogonal_haar
-from perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, \
+from equivariant_diffusion.utils import remove_mean_with_mask, assert_mean_zero_with_mask, assert_correctly_masked
+from sym_nn.utils import qr, orthogonal_haar
+from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, \
                       t_emb_dim, concat_t_emb, positional_encoding, IdentityPreprocessor
 
 
+"""
 def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
     masked_max_abs_value = (x * (1 - node_mask)).abs().sum().item()
     assert masked_max_abs_value < 1e-5, f'Error {masked_max_abs_value} too high'  # checks for mistakes with masked positions - why?
@@ -19,7 +20,7 @@ def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3],
         return x, mean
     else:
         return x
-
+"""
 """
 # kv_dim is given by dim of input_preprocessor
 # first cross-att is q_dim=d_latents, kv_dim=input_preprocessor.num_channels, and projecting to d_latents
@@ -336,8 +337,10 @@ class SymDiffPerceiverFourier_dynamics(nn.Module):  # using fourier positional e
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         gamma_x = torch.bmm(x, gamma.transpose(2, 1))
+        assert_mean_zero_with_mask(gamma_x, node_mask)  # ???
         xh = torch.cat([gamma_x, h], dim=-1)
-
+        assert_correctly_masked(xh, node_mask)  
+        
         return xh
 
 
@@ -429,6 +432,8 @@ class SymDiffTransformer_dynamics(nn.Module):
 
         bs, n_nodes, _ = xh.shape
 
+        print("norm of original xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
         x = remove_mean_with_mask(x, node_mask)
@@ -443,14 +448,21 @@ class SymDiffTransformer_dynamics(nn.Module):
 
         g_inv_x = self.gamma_linear_in(g_inv_x)  # [bs, n_nodes, gamma_d_model]
 
+        print("norm of g_inv_x after gamma_lin_in: ", torch.mean(torch.norm(g_inv_x, dim=(1, 2))))
+
+        att_mask = ~node_mask.bool()
+
         # [bs, 3, 3] - no noise in gamma
         gamma = self.gamma(
             g_inv_x, self.gamma_query.expand(bs, self.n_dims, -1), 
-            src_key_padding_mask=node_mask.squeeze(-1), 
-            memory_key_padding_mask=node_mask.squeeze(-1)
+            src_key_padding_mask=att_mask.squeeze(-1), 
+            memory_key_padding_mask=att_mask.squeeze(-1)
         )
+        print("norm of gamma before qr: ", torch.mean(torch.norm(gamma, dim=-1)) )
         gamma = qr(self.gamma_linear_out(gamma))[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        print("norm of gamma: ", torch.mean(torch.norm(gamma, dim=-1)))
 
         # compute k
         gamma_inv_x = torch.bmm(x, gamma)
@@ -459,25 +471,148 @@ class SymDiffTransformer_dynamics(nn.Module):
         else:
             xh = torch.cat([gamma_inv_x, h, context], dim=-1)
 
+        print("norm of gamma to xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
         if self.t_fourier:
             xh = concat_t_emb(self.t_config, xh, t)
         else:
             xh = torch.cat([xh, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+in_node_nf+context_node_nf+1]
 
+        print("norm of xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
         xh = self.k_linear_in(xh)
-        xh = self.k(xh, src_key_padding_mask=node_mask.squeeze(-1)) * node_mask
-        xh = self.k_linear_out(xh)
+        print("norm of xh after k_lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        xh = self.k(xh, src_key_padding_mask=att_mask.squeeze(-1))
+        print("norm of xh after k: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        xh = self.k_linear_out(xh)  # NOTE: bias of nn.Linear
+        print("norm of xh after k_lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        print("norm of xh masked: ", torch.mean(torch.norm((1-node_mask)*xh, dim=(1, 2))))
+        
+        if torch.isnan(xh).any():
+            print("NANs")
+            print(torch.sum(torch.isnan(xh)))
+            print(torch.isnan(xh).nonzero())
+            print(xh[torch.isnan(xh).nonzero()[0]], t[torch.isnan(xh).nonzero()[0]])
+            print(xh, t)
+        xh *= node_mask
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
 
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
-
         gamma_x = torch.bmm(x, gamma.transpose(2, 1))
         xh = torch.cat([gamma_x, h], dim=-1)
+        print("norm of xh after com_free/end: ", torch.mean(torch.norm(xh, dim=(1, 2))), "\n")
+        return xh
+
+
+class Transformer_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        trans_num_layers: int,
+        trans_d_model: int, 
+        trans_nhead: int,
+        trans_dim_feedforward: int, 
+        trans_dropout: float,
+
+        num_bands: int,
+        max_resolution: float,
+        t_fourier: bool = True,
+        concat_t: bool = False,
+
+        activation: str = "gelu", 
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        self.args = args
+
+        self.n_dims = n_dims
+        self.in_node_nf = in_node_nf
+        self.context_node_nf = context_node_nf
+        self.node_dim = n_dims + in_node_nf
+
+        # whether to add t via fourier embeddings or concat
+        self.t_fourier = t_fourier
+        self.t_config = SymDiffPerceiverConfig(
+            num_bands=num_bands, max_resolution=max_resolution, 
+            concat_t=concat_t
+        )
+        self.t_dim = t_emb_dim(self.t_config) if t_fourier else 1
+
+        self.linear_in = nn.Linear(self.node_dim+self.t_dim+context_node_nf, trans_d_model, device=device)
+        self.linear_out = nn.Linear(trans_d_model, self.node_dim, device=device)
+
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            trans_d_model, trans_nhead, trans_dim_feedforward, trans_dropout, 
+            activation=activation, batch_first=True, norm_first=True,
+            device=device
+        )
+        self.model = nn.TransformerEncoder(self.encoder_layer, trans_num_layers)
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        bs, n_nodes, _ = xh.shape
+
+        print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+
+        x_0 = x * 1.
+
+        print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        if context is None:
+            xh = torch.cat([x, h], dim=-1)
+        else:
+            xh = torch.cat([x, h, context], dim=-1)
+
+        if self.t_fourier:
+            xh = concat_t_emb(self.t_config, xh, t)
+        else:
+            xh = torch.cat([xh, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+1]
+        print("initial xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        xh = self.linear_in(xh)
+        print("xh after lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+ 
+        att_mask = ~node_mask.bool()
+        xh = self.model(xh, src_key_padding_mask=att_mask.squeeze(-1))
+        print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        xh = self.linear_out(xh) * node_mask 
+        print("xh after lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+            x -= x_0
+
+        xh = torch.cat([x, h], dim=-1)
+        
+        print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         return xh
+
 
 if __name__ == "__main__":
 
