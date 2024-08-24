@@ -200,6 +200,17 @@ parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT
 parser.add_argument("--depth", type=int, default=6, help="config for DiT")
 parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
 parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
+parser.add_argument("--subtract_x_0", type=bool, default=False, help="config for DiT")
+
+# -------- DiT_GNN args -------- #
+
+parser.add_argument("--enc_out_channels", type=int, default=1, help="config for DiT_GNN")  # not used
+parser.add_argument("--enc_x_scale", type=float, default=25.0, help="config for DiT_GNN")
+parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_GNN")
+parser.add_argument("--enc_depth", type=int, default=4, help="config for DiT_GNN")
+parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT_GNN")
+parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_GNN")
+parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_GNN")
 
 # -------- sym_diff time args -------- #
 

@@ -236,7 +236,7 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
-    def forward(self, x, t, attn_mask):
+    def forward(self, x, t, attn_mask, use_final_layer=True):
         """
         Forward pass of DiT.
         x: (N, D)
@@ -247,6 +247,7 @@ class DiT(nn.Module):
         c = t                                    # (N, D)
         for block in self.blocks:
             x = block(x, c, attn_mask)            # (N, T, D)
-        x = self.final_layer(x, c)               # (N, T, out_channels)
+        if use_final_layer:
+            x = self.final_layer(x, c)               # (N, T, out_channels)
         return x
 

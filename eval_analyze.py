@@ -122,6 +122,8 @@ def main():
                         help='Specify model path')
     parser.add_argument('--save_to_xyz', type=eval, default=False,
                         help='Should save samples to xyz files.')
+    parser.add_argument("--datadir", type=str, default=None, 
+                        help="Use if trained on a different node")
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -129,6 +131,10 @@ def main():
 
     with open(join(eval_args.model_path, 'args.pickle'), 'rb') as f:
         args = pickle.load(f)
+
+    if eval_args.datadir is not None:
+        print("Using different datadir!")
+        args.datadir = eval_args.datadir
 
     # NOTE: CAREFUL with this -->
     if not hasattr(args, 'normalization_factor'):

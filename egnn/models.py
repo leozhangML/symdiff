@@ -69,8 +69,8 @@ class EGNN_dynamics_QM9(nn.Module):
         edges = self.get_adj_matrix(n_nodes, bs, self.device)  # needed for GNN
         edges = [x.to(self.device) for x in edges]
         node_mask = node_mask.view(bs*n_nodes, 1)
-        edge_mask = edge_mask.view(bs*n_nodes*n_nodes, 1)
-        xh = xh.view(bs*n_nodes, -1).clone() * node_mask  # [bs*n_nodes, dims]
+        edge_mask = edge_mask.view(bs*n_nodes*n_nodes, 1) 
+        xh = xh.view(bs*n_nodes, -1).clone() * node_mask  # [bs*n_nodes, dims]  -  why use .clone() here?
         x = xh[:, 0:self.n_dims].clone()  # [bs*n_nodes, n_dim] for pos
         if h_dims == 0:
             h = torch.ones(bs*n_nodes, 1).to(self.device)  # [bs*n_nodes, 1] ?

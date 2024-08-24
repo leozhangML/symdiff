@@ -7,7 +7,7 @@ from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, \
-                          Transformer_dynamics, DiT_dynamics
+                          Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -34,7 +34,7 @@ def get_model(args, device, dataset_info, dataloader_train):
             attention=args.attention, tanh=args.tanh, mode=args.model, norm_constant=args.norm_constant,
             inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
             normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method)
-    
+
     elif args.model == "symdiff_perceiver_dynamics":
 
         net_dynamics = SymDiffPerceiver_dynamics(
@@ -156,7 +156,53 @@ def get_model(args, device, dataset_info, dataloader_train):
             args=args, in_node_nf=in_node_nf, context_node_nf=args.context_node_nf,
             x_scale=args.x_scale, 
             hidden_size=args.hidden_size, depth=args.depth, num_heads=args.num_heads,
-            mlp_ratio=args.mlp_ratio, use_fused_attn=True
+            mlp_ratio=args.mlp_ratio, use_fused_attn=True, subtract_x_0=args.subtract_x_0,
+            device=device
+        )
+
+    elif args.model == "dit_gnn_dynamics":
+
+        net_dynamics = DiT_GNN_dynamics(
+            args, 
+            in_node_nf=dynamics_in_node_nf, 
+            context_node_nf=args.context_node_nf,
+
+            enc_out_channels=args.enc_out_channels,
+            enc_x_scale=args.enc_x_scale,
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+            use_fused_attn=True,
+
+            dec_hidden_features=args.dec_hidden_features,
+            device=device
+        )
+
+    elif args.model == "dit_dit_dynamics":
+
+        net_dynamics = DiT_DiT_dynamics(
+            args, 
+            in_node_nf=in_node_nf, 
+            context_node_nf=args.context_node_nf,
+
+            enc_out_channels=args.enc_out_channels,
+            enc_x_scale=args.enc_x_scale,
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+            use_fused_attn=True,
+
+            dec_hidden_features=args.dec_hidden_features,
+
+            x_scale=args.x_scale, 
+            hidden_size=args.hidden_size, 
+            depth=args.depth, 
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+
+            device=device
         )
 
     if args.probabilistic_model == 'diffusion':

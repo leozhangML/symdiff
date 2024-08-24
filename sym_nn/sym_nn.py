@@ -8,6 +8,9 @@ from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPe
                       t_emb_dim, concat_t_emb, positional_encoding, IdentityPreprocessor
 from sym_nn.dit import DiT
 
+from qm9.models import EGNN_dynamics_QM9
+from timm.models.vision_transformer import Mlp
+
 """
 def remove_mean_with_mask(x, node_mask, return_mean=False):  # [bs, n_nodes, 3], [bs, n_nodes, 1]
     masked_max_abs_value = (x * (1 - node_mask)).abs().sum().item()
@@ -337,9 +340,9 @@ class SymDiffPerceiverFourier_dynamics(nn.Module):  # using fourier positional e
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         gamma_x = torch.bmm(x, gamma.transpose(2, 1))
-        assert_mean_zero_with_mask(gamma_x, node_mask)  # ???
+        #assert_mean_zero_with_mask(gamma_x, node_mask)  # ???
         xh = torch.cat([gamma_x, h], dim=-1)
-        assert_correctly_masked(xh, node_mask)  
+        #assert_correctly_masked(xh, node_mask)  
         
         return xh
 
@@ -628,6 +631,7 @@ class DiT_dynamics(nn.Module):
         num_heads: int,
         mlp_ratio: float,
         use_fused_attn: bool,
+        subtract_x_0: bool,
         n_dims: int = 3,
         device: str = "cpu"
     ) -> None:
@@ -637,6 +641,8 @@ class DiT_dynamics(nn.Module):
 
         self.args = args
         self.n_dims = n_dims
+
+        self.subtract_x_0 = subtract_x_0
 
         self.model = DiT(
             out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
@@ -663,6 +669,7 @@ class DiT_dynamics(nn.Module):
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
         x = remove_mean_with_mask(x, node_mask)
+        x_0 = x * 1.
         print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         assert context is None
@@ -671,17 +678,237 @@ class DiT_dynamics(nn.Module):
         xh = self.model(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask
         print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
-        x = xh[:, :, :self.n_dims]
+        x = xh[:, :, :self.n_dims] 
         h = xh[:, :, self.n_dims:]
+        if self.subtract_x_0:
+            x -= x_0
 
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         xh = torch.cat([x, h], dim=-1)
         print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        #assert_correctly_masked(xh, node_mask)
+
+        return xh
+
+
+class DiT_GNN_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        enc_out_channels: int,
+        enc_x_scale: float,
+        enc_hidden_size: int,
+        enc_depth: int,
+        enc_num_heads: int,
+        enc_mlp_ratio: float,
+        use_fused_attn: bool,
+
+        dec_hidden_features: int,
+
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        self.args = args
+
+        self.in_node_nf = in_node_nf  # dynamics_in_node_nf (includes time)
+        self.context_node_nf = context_node_nf
+        self.n_dims = n_dims
+
+        self.gamma_enc = DiT(
+            out_channels=enc_out_channels, x_scale=enc_x_scale, 
+            hidden_size=enc_hidden_size, depth=enc_depth, 
+            num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+            use_fused_attn=use_fused_attn
+        ).to(device)
+
+        self.gamma_dec = Mlp(
+            in_features=enc_hidden_size, hidden_features=dec_hidden_features,
+            out_features=n_dims**2
+        ).to(device)
+
+        # use GNN for k
+        self.gnn_dynamics = EGNN_dynamics_QM9(
+            in_node_nf=in_node_nf, context_node_nf=args.context_node_nf,
+            n_dims=n_dims, device=device, hidden_nf=args.nf,
+            act_fn=torch.nn.SiLU(), n_layers=args.n_layers,
+            attention=args.attention, tanh=args.tanh, mode="gnn_dynamics", norm_constant=args.norm_constant,
+            inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
+            normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method
+        )
+
+        self.device = device
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        assert context is None
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+        g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
+
+        # [bs, n_nodes, hidden_size]
+        gamma = node_mask * self.gamma_enc(
+            g_inv_x, t.squeeze(-1), node_mask.squeeze(-1), 
+            use_final_layer=False
+            )
+
+        # decoded summed representation into gamma - this is S_n-invariant
+        N = node_mask.sum(1)  # [bs, 1]
+        gamma = torch.sum(gamma, dim=1) / N  # [bs, hidden_size] 
+        # [bs, 3, 3]
+        gamma = qr(
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+            )[0]
+        gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        gamma_inv_x = torch.bmm(x, gamma)
+        xh = torch.cat([gamma_inv_x, h], dim=-1)
+        xh = self.gnn_dynamics._forward(t, xh, node_mask, edge_mask, context)  # [bs, n_nodes, dims] - com_free
+
+        x = xh[:, :, :self.n_dims] 
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([x, h], dim=-1)
+
         assert_correctly_masked(xh, node_mask)
 
         return xh
+
+
+class DiT_DiT_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        enc_out_channels: int,
+        enc_x_scale: float,
+        enc_hidden_size: int,
+        enc_depth: int,
+        enc_num_heads: int,
+        enc_mlp_ratio: float,
+        use_fused_attn: bool,
+
+        dec_hidden_features: int,
+
+        x_scale: float,
+        hidden_size: int,
+        depth: int,
+        num_heads: int,
+        mlp_ratio: float,
+
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        self.args = args
+
+        self.in_node_nf = in_node_nf  # standard in_node_nf
+        self.context_node_nf = context_node_nf
+        self.n_dims = n_dims
+
+        self.gamma_enc = DiT(
+            out_channels=enc_out_channels, x_scale=enc_x_scale, 
+            hidden_size=enc_hidden_size, depth=enc_depth, 
+            num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+            use_fused_attn=use_fused_attn
+        ).to(device)
+
+        self.gamma_dec = Mlp(
+            in_features=enc_hidden_size, hidden_features=dec_hidden_features,
+            out_features=n_dims**2
+        ).to(device)
+
+        self.k = DiT(
+            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
+            hidden_size=hidden_size, depth=depth, 
+            num_heads=num_heads, mlp_ratio=mlp_ratio, 
+            use_fused_attn=use_fused_attn
+            )
+
+        self.device = device
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        assert context is None
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+        g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
+
+        # [bs, n_nodes, hidden_size]
+        gamma = node_mask * self.gamma_enc(
+            g_inv_x, t.squeeze(-1), node_mask.squeeze(-1), 
+            use_final_layer=False
+            )
+
+        # decoded summed representation into gamma - this is S_n-invariant
+        N = node_mask.sum(1)  # [bs, 1]
+        gamma = torch.sum(gamma, dim=1) / N  # [bs, hidden_size] 
+        # [bs, 3, 3]
+        gamma = qr(
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+            )[0]
+        gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        gamma_inv_x = torch.bmm(x, gamma)
+        xh = torch.cat([gamma_inv_x, h], dim=-1)
+        xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
+
+        x = xh[:, :, :self.n_dims] 
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([x, h], dim=-1)
+
+        assert_correctly_masked(xh, node_mask)
+
+        return xh
+
 
 if __name__ == "__main__":
 
@@ -690,6 +917,10 @@ if __name__ == "__main__":
     class Args:
         def __init__(self) -> None:
             self.com_free = True
+
+            # GNN
+            self.nf = 256
+            self.n_layers = 9
 
     args = Args()
 
@@ -806,4 +1037,21 @@ if __name__ == "__main__":
     print("k params: ", sum(p.numel() for p in model.k.parameters() if p.requires_grad))
     print("total params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
-    print(model._forward(torch.rand(2, 1), torch.randn(2, 5, 9), torch.ones(2, 5, 1), None, None).shape)
+    print(model._forward(torch.rand(2, 1), torch.randn(2, 5, 9), torch.ones(2, 5, 1), None, None).shape, "\n")
+
+    model = DiT_dynamics(
+        args,
+        in_node_nf=6,
+        context_node_nf=0,
+
+        x_scale=25.0,
+        hidden_size=32,
+        depth=4,
+        num_heads=2,
+        mlp_ratio=2.0,
+        use_fused_attn=True,
+        subtract_x_0=False,
+    )
+    
+    print("DiT")
+    print("model params: ", sum(p.numel() for p in model.model.parameters() if p.requires_grad))

@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=analyse_edm_9_4_m
+#SBATCH --job-name=edm_gnn
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -19,7 +19,7 @@
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=01-00:00:00  
+#SBATCH --time=12-00:00:00  
 #SBATCH --mem=24G  
 
 # Don't change unless you know why (look at examples and notes for more information)
@@ -47,9 +47,10 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-#python t.py
-
+python main_qm9.py --n_epochs 1100 --exp_name edm_gnn --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
+       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 9 --lr 1e-4 --normalize_factors [1,4,10] \
+        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+        --save_model True --model gnn_dynamics
 date -u
 
 # script to run main.py
