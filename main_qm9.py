@@ -47,12 +47,15 @@ parser.add_argument('--diffusion_loss_type', type=str, default='l2',
 parser.add_argument('--n_epochs', type=int, default=200)
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--lr', type=float, default=2e-4)
-parser.add_argument('--use_amsgrad', type=bool, default=True)  # default from EDM
+parser.add_argument('--use_amsgrad', action="store_true")  # default from EDM
 parser.add_argument('--weight_decay', type=float, default=1e-12)  # default from EDM
 
 parser.add_argument('--scheduler', type=str, default=None)  # default from EDM
 parser.add_argument('--num_warmup_steps', type=int, default=30000)  # default from EDM
 parser.add_argument('--num_training_steps', type=int, default=350000)  # default from EDM
+
+parser.add_argument('--clipping_type', type=str, default="queue")
+parser.add_argument('--max_grad_norm', type=float, default=1.5)
 
 parser.add_argument('--brute_force', type=eval, default=False,
                     help='True | False')
@@ -135,8 +138,7 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
 # -------- sym_diff args -------- #
 
 parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
-parser.add_argument("--com_free", type=bool, default=True, help="whether to use the CoM subspace")
-parser.add_argument("--augment_rotation", type=bool, default=False, help="whether to apply random rotations for training")
+parser.add_argument("--com_free", action="store_true", help="whether to use the CoM subspace")
 
 # -------- sym_diff perceiver args -------- #
 
@@ -161,7 +163,7 @@ parser.add_argument("--k_num_cross_attention_heads", type=int, default=4, help="
 parser.add_argument("--k_attention_probs_dropout_prob", type=float, default=0.1, help="k config for perceiver")
 parser.add_argument("--k_pos_num_channels", type=int, default=64, help="k config for perceiver")
 parser.add_argument("--k_num_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_decoder_self_attention", type=bool, default=True, help="k config for perceiver")
+parser.add_argument("--no_k_decoder_self_attention", action="store_false", help="k config for perceiver")
 parser.add_argument("--k_num_self_heads", type=int, default=4, help="k config for perceiver")
 
 # -------- sym_diff transformer args -------- #
@@ -200,7 +202,9 @@ parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT
 parser.add_argument("--depth", type=int, default=6, help="config for DiT")
 parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
 parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
-parser.add_argument("--subtract_x_0", type=bool, default=False, help="config for DiT")
+parser.add_argument("--subtract_x_0", action="store_true", help="config for DiT")
+
+parser.add_argument("--x_emb", type=str, default="fourier", help="config for DiT")
 
 # -------- DiT_GNN args -------- #
 
@@ -212,12 +216,19 @@ parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT
 parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_GNN")
 parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_GNN")
 
+# -------- GNN_DiT args -------- #
+
+parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for GNN_GNN")
+parser.add_argument("--gamma_gnn_hidden_size", type=int, default=64, help="config for GNN_GNN")
+parser.add_argument("--gamma_gnn_out_size", type=int, default=64, help="config for GNN_GNN")
+parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="config for GNN_GNN")
+
 # -------- sym_diff time args -------- #
 
 parser.add_argument("--num_bands", type=int, default=32, help="fourier time embedding config")
 parser.add_argument("--max_resolution", type=float, default=100, help="fourier time embedding config")
-parser.add_argument("--concat_t", type=bool, default=False, help="fourier time embedding config")
-parser.add_argument("--t_fourier", type=bool, default=True, help="time config for transformer")
+parser.add_argument("--concat_t", action="store_true", help="fourier time embedding config")
+parser.add_argument("--t_fourier", action="store_true", help="time config for transformer")
 
 
 args = parser.parse_args()

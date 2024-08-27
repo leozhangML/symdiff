@@ -9,6 +9,7 @@ from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPe
 from sym_nn.dit import DiT
 
 from qm9.models import EGNN_dynamics_QM9
+from sym_nn.gnn import GNNEnc
 from timm.models.vision_transformer import Mlp
 
 """
@@ -632,6 +633,9 @@ class DiT_dynamics(nn.Module):
         mlp_ratio: float,
         use_fused_attn: bool,
         subtract_x_0: bool,
+
+        x_emb: str,
+
         n_dims: int = 3,
         device: str = "cpu"
     ) -> None:
@@ -648,7 +652,7 @@ class DiT_dynamics(nn.Module):
             out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
             hidden_size=hidden_size, depth=depth, 
             num_heads=num_heads, mlp_ratio=mlp_ratio, 
-            use_fused_attn=use_fused_attn
+            use_fused_attn=use_fused_attn, x_emb=x_emb
             )
 
         self.device = device
@@ -824,6 +828,8 @@ class DiT_DiT_dynamics(nn.Module):
         num_heads: int,
         mlp_ratio: float,
 
+        x_emb: str,
+
         n_dims: int = 3,
         device: str = "cpu"
     ) -> None:
@@ -851,7 +857,7 @@ class DiT_DiT_dynamics(nn.Module):
             out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
             hidden_size=hidden_size, depth=depth, 
             num_heads=num_heads, mlp_ratio=mlp_ratio, 
-            use_fused_attn=use_fused_attn
+            use_fused_attn=use_fused_attn, x_emb=x_emb
             )
 
         self.device = device
@@ -895,6 +901,183 @@ class DiT_DiT_dynamics(nn.Module):
         gamma_inv_x = torch.bmm(x, gamma)
         xh = torch.cat([gamma_inv_x, h], dim=-1)
         xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
+
+        x = xh[:, :, :self.n_dims] 
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([x, h], dim=-1)
+
+        assert_correctly_masked(xh, node_mask)
+
+        return xh
+
+
+class DiTMessage_dynamics(nn.Module):  # use a message passing head with a DiT
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        x_scale: float,
+        hidden_size: int,
+        depth: int,
+        num_heads: int,
+        mlp_ratio: float,
+        use_fused_attn: bool,
+        subtract_x_0: bool,
+
+        x_emb: str,
+
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        
+        self.args = args
+        self.n_dims = n_dims
+
+        self.subtract_x_0 = subtract_x_0
+
+        self.model = DiT(
+            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=x_scale, 
+            hidden_size=hidden_size, depth=depth, 
+            num_heads=num_heads, mlp_ratio=mlp_ratio, 
+            use_fused_attn=use_fused_attn, x_emb=x_emb
+            )
+
+        self.gnn = EGNN_dynamics_QM9(
+            in_node_nf=in_node_nf+1, context_node_nf=args.context_node_nf,
+            n_dims=n_dims, device=device, hidden_nf=args.nf,
+            act_fn=torch.nn.SiLU(), n_layers=args.n_layers,
+            attention=args.attention, tanh=args.tanh, mode="gnn_dynamics", norm_constant=args.norm_constant,
+            inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
+            normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method
+        )
+
+        self.device = device
+
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+
+        assert context is None
+        xh = torch.cat([x, h], dim=-1)
+
+        xh = self.model(xh, t.squeeze(-1), node_mask.squeeze(-1), 
+                        use_final_layer=False) * node_mask  # [bs, n_nodes, hidden_size]
+
+        xh = None
+
+        edges = self.gnn.get_adj_matrix(n_nodes, bs, self.device)
+        xh = self.gnn._forward()
+
+        x = xh[:, :, :self.n_dims] 
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        xh = torch.cat([x, h], dim=-1)
+        print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        #assert_correctly_masked(xh, node_mask)
+
+        return xh
+
+
+class GNN_GNN_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        gamma_gnn_layers: int,
+        gamma_gnn_hidden_size: int,
+        gamma_gnn_out_size: int,
+        gamma_dec_hidden_size: int,
+
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        self.args = args
+
+        self.in_node_nf = in_node_nf
+        self.context_node_nf = context_node_nf
+        self.n_dims = n_dims
+
+        # need to add time dim for both GNNs
+        self.gnn_enc = GNNEnc(
+            in_node_nf=in_node_nf+1, context_node_nf=context_node_nf, out_node_nf=gamma_gnn_out_size,
+            n_dims=n_dims, hidden_nf=gamma_gnn_hidden_size, device=device,
+            act_fn=torch.nn.SiLU(), n_layers=gamma_gnn_layers,
+            normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method
+        )
+
+        self.gamma_dec = Mlp(
+            in_features=gamma_gnn_out_size, hidden_features=gamma_dec_hidden_size,
+            out_features=n_dims**2
+        ).to(device)
+
+        self.gnn_dynamics = EGNN_dynamics_QM9(
+            in_node_nf=in_node_nf+1, context_node_nf=args.context_node_nf,
+            n_dims=n_dims, device=device, hidden_nf=args.nf,
+            act_fn=torch.nn.SiLU(), n_layers=args.n_layers,
+            attention=args.attention, tanh=args.tanh, mode="gnn_dynamics", norm_constant=args.norm_constant,
+            inv_sublayers=args.inv_sublayers, sin_embedding=args.sin_embedding,
+            normalization_factor=args.normalization_factor, aggregation_method=args.aggregation_method
+        )
+
+        self.device = device
+    
+    def forward(self):
+        raise NotImplementedError
+
+    def _forward(self, t, xh, node_mask, edge_mask, context):
+
+        assert context is None
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+        x = remove_mean_with_mask(x, node_mask)
+
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+        g_inv_x = torch.bmm(x, g)  # as x is represented row-wise
+        xh = torch.cat([g_inv_x, h], dim=-1)
+
+        # [bs, n_nodes, hidden_size]
+        gamma = node_mask * self.gnn_enc._forward(
+            t, xh, node_mask, edge_mask, context
+            )
+
+        # decoded summed representation into gamma - this is S_n-invariant
+        N = node_mask.sum(1)  # [bs, 1]
+        gamma = torch.sum(gamma, dim=1) / N  # [bs, hidden_size] 
+        # [bs, 3, 3]
+        gamma = qr(
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+            )[0]
+        gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        gamma_inv_x = torch.bmm(x, gamma)
+        xh = torch.cat([gamma_inv_x, h], dim=-1)
+        xh = self.gnn_dynamics._forward(t, xh, node_mask, edge_mask, context)  # [bs, n_nodes, dims] - com_free
 
         x = xh[:, :, :self.n_dims] 
         h = xh[:, :, self.n_dims:]

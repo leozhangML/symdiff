@@ -134,6 +134,30 @@ class PositionEmbedder:
         return x_emb
 
 
+class FourierEmbedder(nn.Module):
+    """
+    Constructs learnable fourier feature embeddings
+    """
+    def __init__(self, input_dim, hidden_size, frequency_embedding_size=256):
+        super().__init__()
+        assert frequency_embedding_size % 2 == 0
+        self.linear_embed = nn.Linear(input_dim, frequency_embedding_size//2, bias=False)
+        self.mlp = nn.Sequential(
+            nn.Linear(frequency_embedding_size, hidden_size, bias=True),
+            nn.SiLU(),
+            nn.Linear(hidden_size, hidden_size, bias=True),
+        )
+        self.frequency_embedding_size = frequency_embedding_size
+
+    def forward(self, x):
+        x_emb = self.linear_embed(x)  # [bs, n_nodes, frequency_embedding_size/2]
+        x_emb = torch.cat(
+            [torch.cos(x_emb), torch.sin(x_emb)], dim=-1
+            ) / np.sqrt(self.frequency_embedding_size)
+        x_emb = self.mlp(x_emb)
+        return x_emb
+
+
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
@@ -194,14 +218,32 @@ class DiT(nn.Module):
         depth=6,
         num_heads=4,
         mlp_ratio=2.0,
-        use_fused_attn=False
+        use_fused_attn=False,
+        x_emb="fourier",
+        tau=1.0,
+        n_dims=3
     ):
         super().__init__()
         self.out_channels = out_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
 
-        self.x_embedder = PositionEmbedder(hidden_size, x_scale)
+        self.x_emb = x_emb
+        if x_emb == "fourier":
+            self.x_embedder = PositionEmbedder(hidden_size, x_scale)
+        elif x_emb == "linear":
+            self.x_embedder = nn.Linear(9, hidden_size)  # hard code for now
+        elif x_emb == "learnable_fourier":
+            self.tau = tau
+            self.x_embedder = FourierEmbedder(9, hidden_size, 
+                                              frequency_embedding_size=256)  # hard code for now
+        elif x_emb == "cat_learnable_fourier":
+            self.tau = tau
+            self.x_embedder = FourierEmbedder(9, hidden_size - 9, 
+                                              frequency_embedding_size=256)
+        else:
+            raise ValueError
+
         self.t_embedder = TimestepEmbedder(hidden_size)
 
         self.blocks = nn.ModuleList([
@@ -225,6 +267,10 @@ class DiT(nn.Module):
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
         nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
+        # init embed layer
+        if self.x_emb == "learnable_fourier":
+            nn.init.normal_(self.x_embedder.linear_embed.weight, std=1/self.tau**2)
+
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
@@ -242,7 +288,12 @@ class DiT(nn.Module):
         x: (N, D)
         t: (N,) tensor of diffusion timesteps
         """
-        x = self.x_embedder.apply(x)             # (N, T, D)
+        if self.x_emb == "fourier":
+            x = self.x_embedder.apply(x)             # (N, T, D)
+        elif self.x_emb == "linear" or self.x_emb == "learnable_fourier":
+            x = self.x_embedder(x)
+        elif self.x_emb == "cat_learnable_fourier":
+            x = torch.cat([x, self.x_embedder(x)], dim=-1)
         t = self.t_embedder(t)                   # (N, D)
         c = t                                    # (N, D)
         for block in self.blocks:

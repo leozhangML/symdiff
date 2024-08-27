@@ -13,7 +13,7 @@
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk

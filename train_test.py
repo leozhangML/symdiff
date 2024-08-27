@@ -59,7 +59,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         loss.backward()
 
         if args.clip_grad:
-            grad_norm = utils.gradient_clipping(model, gradnorm_queue)  # why grad_norm here instead of model_dp?
+            grad_norm = utils.gradient_clipping(args, model, gradnorm_queue, clipping_type=args.clipping_type)  # why grad_norm here instead of model_dp?
         else:
             grad_norm = 0.
 

@@ -5,25 +5,26 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=analyse_DiT_GNN_decay_9
+#SBATCH --job-name=DiT_GNN_big
 
-# Using thet cluster srf_gpu_01 and node 6
+# Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
-#SBATCH --partition=high-bigbayes-test
+#SBATCH --partition=high-bigbayes-gpu
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
 #SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
-#NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
+#SBATCH --nodelist=zizgpu05.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=01-00:00:00  
-#SBATCH --mem=24G  
+#SBATCH --time=12-00:00:00  
+#SBATCH --mem=32G  
 
 # Don't change unless you know why (look at examples and notes for more information)
 #SBATCH --ntasks=1
+
 
 echo "bruh"
 
@@ -47,9 +48,12 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-#python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-python eval_analyze.py --model_path outputs/DiT_GNN_decay_9 --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-#python t.py
+python main_qm9.py --n_epochs 1200 --exp_name DiT_GNN_big --model dit_gnn_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
+       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 128 --lr 1e-4 --normalize_factors [1,4,10] \
+        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
+        --save_model True --enc_out_channels 1 --enc_x_scale 25.0 --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 2 --enc_mlp_ratio 2.0 \
+        --dec_hidden_features 32 --com_free True --clip_grad True --dp False \
+        --subtract_x_0 False --use_amsgrad True --nf 256 --n_layers 16 --data_augmentation True
 
 date -u
 

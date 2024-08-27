@@ -4,7 +4,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiT
+#SBATCH --job-name=DiT_DiT_linear
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -47,12 +47,13 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 5000 --exp_name DiT_DiT --model dit_dit_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
+python main_qm9.py --n_epochs 3000 --exp_name DiT_DiT_linear --model dit_dit_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
        --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 256 --lr 1e-4 --normalize_factors [1,4,10] \
         --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir  /data/zizgpu06/not-backed-up/nvme00/lezhang \
         --save_model True --enc_out_channels 1 --enc_x_scale 25.0 --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 2 --enc_mlp_ratio 2.0 \
         --dec_hidden_features 32 --com_free True --clip_grad True --dp False \
-        --subtract_x_0 False --use_amsgrad False --x_scale 25.0 --hidden_size 256 --depth 8 --num_heads 4 --mlp_ratio 2.0 
+        --subtract_x_0 False --use_amsgrad False --x_scale 25.0 --hidden_size 256 --depth 14 --num_heads 8 --mlp_ratio 1.0 --x_emb linear \
+        --num_warmup_steps 100000 --num_training_steps 800000
 
 date -u
 

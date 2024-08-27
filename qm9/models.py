@@ -7,7 +7,7 @@ from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, \
-                          Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics
+                          Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics, GNN_GNN_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -157,7 +157,7 @@ def get_model(args, device, dataset_info, dataloader_train):
             x_scale=args.x_scale, 
             hidden_size=args.hidden_size, depth=args.depth, num_heads=args.num_heads,
             mlp_ratio=args.mlp_ratio, use_fused_attn=True, subtract_x_0=args.subtract_x_0,
-            device=device
+            x_emb=args.x_emb, device=device
         )
 
     elif args.model == "dit_gnn_dynamics":
@@ -202,7 +202,18 @@ def get_model(args, device, dataset_info, dataloader_train):
             num_heads=args.num_heads,
             mlp_ratio=args.mlp_ratio,
 
+            x_emb=args.x_emb,
+
             device=device
+        )
+
+    elif args.model == "gnn_gnn_dynamics":
+
+        net_dynamics = GNN_GNN_dynamics(
+            args, in_node_nf=in_node_nf, context_node_nf=args.context_node_nf,
+            gamma_gnn_layers=args.gamma_gnn_layers, gamma_gnn_hidden_size=args.gamma_gnn_hidden_size,
+            gamma_gnn_out_size=args.gamma_gnn_out_size, gamma_dec_hidden_size=args.gamma_dec_hidden_size,
+            n_dims=3, device=device
         )
 
     if args.probabilistic_model == 'diffusion':
