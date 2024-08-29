@@ -139,6 +139,8 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
 
 parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
 parser.add_argument("--com_free", action="store_true", help="whether to use the CoM subspace")
+parser.add_argument("--print_grad_norms", action="store_true", help="whether to show the gamma and k grad norms")
+parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
 # -------- sym_diff perceiver args -------- #
 
@@ -206,7 +208,7 @@ parser.add_argument("--subtract_x_0", action="store_true", help="config for DiT"
 
 parser.add_argument("--x_emb", type=str, default="fourier", help="config for DiT")
 
-# -------- DiT_GNN args -------- #
+# -------- DiT_GNN and DiT_DiT args -------- #
 
 parser.add_argument("--enc_out_channels", type=int, default=1, help="config for DiT_GNN")  # not used
 parser.add_argument("--enc_x_scale", type=float, default=25.0, help="config for DiT_GNN")
@@ -216,12 +218,22 @@ parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT
 parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_GNN")
 parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_GNN")
 
+parser.add_argument("--enc_x_emb", type=str, default="linear", help="config for DiT_GNN and DiT_DiT")
+parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_GNN")
+parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_GNN")
+parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_GNN")
+
 # -------- GNN_DiT args -------- #
 
 parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for GNN_GNN")
 parser.add_argument("--gamma_gnn_hidden_size", type=int, default=64, help="config for GNN_GNN")
 parser.add_argument("--gamma_gnn_out_size", type=int, default=64, help="config for GNN_GNN")
 parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="config for GNN_GNN")
+
+# -------- sym_diff time args -------- #
+
+parser.add_argument("--enc_gnn_layers", type=int, default=2, help="config for DiTMessage")
+parser.add_argument("--enc_gnn_hidden_size", type=int, default=256, help="config for DiTMessage")
 
 # -------- sym_diff time args -------- #
 
@@ -311,6 +323,8 @@ model = model.to(device)
 optim = get_optim(args, model)
 scheduler = get_scheduler(args, optim)
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+if args.print_parameter_count:
+    model.dynamics.print_parameter_count()
 
 gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
 gradnorm_queue.add(3000)  # Add large value that will be flushed.

@@ -53,8 +53,12 @@ def reverse_tensor(x):
 
 def sample_chain(args, device, flow, n_tries, dataset_info, prop_dist=None):
     n_samples = 1
-    if args.dataset == 'qm9' or args.dataset == 'qm9_second_half' or args.dataset == 'qm9_first_half':  
-        n_nodes = 19
+    if args.dataset == 'qm9' or args.dataset == 'qm9_second_half' or args.dataset == 'qm9_first_half':
+        # NOTE: LEO - changed to allow for a fixed number of atoms
+        if args.filter_n_atoms is None:
+            n_nodes = 19
+        else:
+            n_nodes = args.filter_n_atoms
     elif args.dataset == 'geom':
         n_nodes = 44
     else:
@@ -110,7 +114,7 @@ def sample_chain(args, device, flow, n_tries, dataset_info, prop_dist=None):
 def sample(args, device, generative_model, dataset_info,
            prop_dist=None, nodesxsample=torch.tensor([10]), context=None,
            fix_noise=False):
-    max_n_nodes = dataset_info['max_n_nodes']  # this is the maximum node_size in QM9
+    max_n_nodes = dataset_info['max_n_nodes']  # this is the maximum node_size in QM9 - see dataset_config
 
     assert int(torch.max(nodesxsample)) <= max_n_nodes
     batch_size = len(nodesxsample)

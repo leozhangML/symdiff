@@ -72,6 +72,9 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         if args.ema_decay > 0:
             ema.update_model_average(model_ema, model)
 
+        if args.print_grad_norms:
+            model.dynamics.print_gradient_norm()
+
         if i % args.n_report_steps == 0:
             print(f"\rEpoch: {epoch}, iter: {i}/{n_iterations}, "
                   f"Loss {loss.item():.2f}, NLL: {nll.item():.2f}, "

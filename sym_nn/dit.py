@@ -221,7 +221,7 @@ class DiT(nn.Module):
         use_fused_attn=False,
         x_emb="fourier",
         tau=1.0,
-        n_dims=3
+        input_dim=9
     ):
         super().__init__()
         self.out_channels = out_channels
@@ -232,15 +232,17 @@ class DiT(nn.Module):
         if x_emb == "fourier":
             self.x_embedder = PositionEmbedder(hidden_size, x_scale)
         elif x_emb == "linear":
-            self.x_embedder = nn.Linear(9, hidden_size)  # hard code for now
+            self.x_embedder = nn.Linear(input_dim, hidden_size)  # hard code for now
         elif x_emb == "learnable_fourier":
             self.tau = tau
-            self.x_embedder = FourierEmbedder(9, hidden_size, 
+            self.x_embedder = FourierEmbedder(input_dim, hidden_size, 
                                               frequency_embedding_size=256)  # hard code for now
         elif x_emb == "cat_learnable_fourier":
             self.tau = tau
-            self.x_embedder = FourierEmbedder(9, hidden_size - 9, 
+            self.x_embedder = FourierEmbedder(input_dim, hidden_size - input_dim, 
                                               frequency_embedding_size=256)
+        elif x_emb == "identity":
+            self.x_embedder = nn.Identity()
         else:
             raise ValueError
 
@@ -290,10 +292,11 @@ class DiT(nn.Module):
         """
         if self.x_emb == "fourier":
             x = self.x_embedder.apply(x)             # (N, T, D)
-        elif self.x_emb == "linear" or self.x_emb == "learnable_fourier":
+        elif self.x_emb in ["linear", "learnable_fourier", "identity"]:
             x = self.x_embedder(x)
         elif self.x_emb == "cat_learnable_fourier":
             x = torch.cat([x, self.x_embedder(x)], dim=-1)
+
         t = self.t_embedder(t)                   # (N, D)
         c = t                                    # (N, D)
         for block in self.blocks:

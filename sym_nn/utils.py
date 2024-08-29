@@ -89,3 +89,12 @@ def orthogonal_haar(dim: int, target_tensor: torch.Tensor) -> torch.Tensor:
     noise = torch.randn(target_tensor.shape[0], dim, dim, 
                         device=target_tensor.device)
     return qr(noise)[0]
+
+def compute_gradient_norm(model):
+    grads = [
+        param.grad.detach().flatten()
+        for param in model.parameters()
+        if param.grad is not None
+    ]
+    norm = torch.cat(grads).norm(p=2.0)
+    return norm

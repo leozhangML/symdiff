@@ -5,18 +5,18 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_tune_ema
+#SBATCH --job-name=DiTMessage
 
-# Using thet cluster srf_gpu_01 and node 6
+# Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
-#SBATCH --partition=high-bigbayes-test
+#SBATCH --partition=high-bigbayes-gpu
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 
 # This is useful for selecting the particular nodes that you want
-#NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
+#SBATCH --nodelist=zizgpu02.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
 #SBATCH --time=12-00:00:00  
@@ -48,13 +48,14 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_tune_ema --model dit_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+# x_scale not used
+python main_qm9.py --exp_name DiTMessage --model dit_message_dynamics --dataset qm9 --datadir /data/zizgpu02/not-backed-up/datasets-ziz-all/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
-                   --n_epochs 3000 --batch_size 256 --lr 5e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.999 \
-                   --weight_decay 1e-5 --use_amsgrad --normalize_factors [1,4,10] \
+                   --n_epochs 2500 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
+                   --weight_decay 0.01 --use_amsgrad --normalize_factors [1,4,10] \
                    --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
-                   --x_scale 25.0 --hidden_size 512 --depth 6 --num_heads 8 --mlp_ratio 2.0 --x_emb linear \
-
+                    --enc_gnn_layers 2 --enc_gnn_hidden_size 256 \
+                    --x_scale 1.0 --hidden_size 256 --depth 6 --num_heads 8 --mlp_ratio 1.5
 date -u
 
 # script to run main.py

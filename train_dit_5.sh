@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT
+#SBATCH --job-name=DiT_tune_lr
 
 # Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
@@ -13,7 +13,7 @@
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
 #SBATCH --nodelist=zizgpu05.cpu.stats.ox.ac.uk
@@ -47,10 +47,12 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 1000 --exp_name DiT_test --model dit_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 512 --lr 1e-4 --normalize_factors [1,4,10] \
-        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
-        --save_model True --x_scale 25.0 --hidden_size 256 --depth 6 --num_heads 4 --mlp_ratio 2.0 --com_free True --clip_grad True --dp False
+python main_qm9.py --exp_name DiT_tune_lr --model dit_dynamics --dataset qm9 --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
+                   --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
+                   --n_epochs 3000 --batch_size 256 --lr 1e-3 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
+                   --weight_decay 0.01 --use_amsgrad --normalize_factors [1,4,10] \
+                   --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
+                   --x_scale 25.0 --hidden_size 512 --depth 6 --num_heads 8 --mlp_ratio 2.0 --x_emb linear \
 
 date -u
 

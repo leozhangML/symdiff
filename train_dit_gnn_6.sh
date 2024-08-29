@@ -4,7 +4,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_GNN_decay_9_64_aug
+#SBATCH --job-name=DiT_GNN_noise
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -12,7 +12,7 @@
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
@@ -47,12 +47,16 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 5000 --exp_name DiT_GNN_decay_9_64_aug --model dit_gnn_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --lr 1e-4 --normalize_factors [1,4,10] \
-        --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir  /data/zizgpu06/not-backed-up/nvme00/lezhang \
-        --save_model True --enc_out_channels 1 --enc_x_scale 25.0 --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 2 --enc_mlp_ratio 2.0 \
-        --dec_hidden_features 32 --com_free True --clip_grad True --dp False \
-        --subtract_x_0 False --use_amsgrad False --nf 256 --n_layers 9 --data_augmentation True
+# enc_out_channels not used
+python main_qm9.py --exp_name DiT_GNN_noise --model dit_gnn_dynamics --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+                   --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
+                   --n_epochs 5000 --batch_size 64 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
+                   --weight_decay 0.01 --use_amsgrad --normalize_factors [1,4,10] \
+                   --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
+                   --enc_out_channels 0 --enc_x_scale 25.0 --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 2.0 \
+                   --enc_x_emb linear --noise_dims 16 --noise_std 1.0 \
+                   --dec_hidden_features 32 \
+                   --nf 256 --n_layers 9
 
 date -u
 

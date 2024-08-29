@@ -73,7 +73,7 @@ def gradient_clipping(args, flow, gradnorm_queue, clipping_type="queue"):
         gradnorm_queue.add(float(grad_norm))
         return grad_norm
 
-    else: 
+    else:
         raise ValueError
 
 

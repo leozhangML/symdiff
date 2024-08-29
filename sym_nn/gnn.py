@@ -65,6 +65,7 @@ class GNNEnc(nn.Module):
             h = torch.cat([h, context], dim=1)  # add context to h
 
         xh = torch.cat([x, h], dim=1)
+        # linear embedding, then message passing layers then linear projection
         output = self.gnn(xh, edges, node_mask=node_mask)
 
         return output.view(bs, n_nodes, -1)

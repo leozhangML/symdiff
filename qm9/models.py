@@ -7,7 +7,8 @@ from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, \
-                          Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics, GNN_GNN_dynamics
+                          Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics, GNN_GNN_dynamics, \
+                          GNN_DiT_dynamics, DiTMessage_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -167,13 +168,18 @@ def get_model(args, device, dataset_info, dataloader_train):
             in_node_nf=dynamics_in_node_nf, 
             context_node_nf=args.context_node_nf,
 
-            enc_out_channels=args.enc_out_channels,
+            enc_out_channels=args.enc_out_channels,  # not used
             enc_x_scale=args.enc_x_scale,
             enc_hidden_size=args.enc_hidden_size,
             enc_depth=args.enc_depth,
             enc_num_heads=args.enc_num_heads,
             enc_mlp_ratio=args.enc_mlp_ratio,
             use_fused_attn=True,
+            enc_x_emb=args.enc_x_emb,
+
+            enc_concat_h=args.enc_concat_h,
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
 
             dec_hidden_features=args.dec_hidden_features,
             device=device
@@ -193,6 +199,7 @@ def get_model(args, device, dataset_info, dataloader_train):
             enc_num_heads=args.enc_num_heads,
             enc_mlp_ratio=args.enc_mlp_ratio,
             use_fused_attn=True,
+            enc_x_emb=args.enc_x_emb,
 
             dec_hidden_features=args.dec_hidden_features,
 
@@ -204,6 +211,12 @@ def get_model(args, device, dataset_info, dataloader_train):
 
             x_emb=args.x_emb,
 
+            enc_concat_h=args.enc_concat_h,
+
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            n_dims=3,
             device=device
         )
 
@@ -214,6 +227,46 @@ def get_model(args, device, dataset_info, dataloader_train):
             gamma_gnn_layers=args.gamma_gnn_layers, gamma_gnn_hidden_size=args.gamma_gnn_hidden_size,
             gamma_gnn_out_size=args.gamma_gnn_out_size, gamma_dec_hidden_size=args.gamma_dec_hidden_size,
             n_dims=3, device=device
+        )
+
+    elif args.model == "gnn_dit_dynamics":
+
+        net_dynamics = GNN_DiT_dynamics(
+            args, 
+            in_node_nf=in_node_nf, 
+            context_node_nf=args.context_node_nf,
+
+            gamma_gnn_layers=args.gamma_gnn_layers, 
+            gamma_gnn_hidden_size=args.gamma_gnn_hidden_size,
+            gamma_gnn_out_size=args.gamma_gnn_out_size, 
+            gamma_dec_hidden_size=args.gamma_dec_hidden_size,
+         
+            x_scale=args.x_scale, 
+            hidden_size=args.hidden_size, 
+            depth=args.depth, 
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio, 
+            
+            x_emb=args.x_emb,    
+            n_dims=3, 
+            device=device
+        )
+
+    elif args.model == "dit_message_dynamics":
+
+        net_dynamics = DiTMessage_dynamics(
+            args, 
+            in_node_nf=in_node_nf, 
+            context_node_nf=args.context_node_nf,
+            enc_gnn_layers=args.enc_gnn_layers,
+            enc_gnn_hidden_size=args.enc_gnn_hidden_size,
+            x_scale=args.x_scale,
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            n_dims=3,
+            device=device
         )
 
     if args.probabilistic_model == 'diffusion':
