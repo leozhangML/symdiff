@@ -313,25 +313,47 @@ class TensorPreprocessor(AbstractPreprocessor):
 
     """For using positional encodings for just time"""
 
-    def __init__(self, dim: int, config: SymDiffPerceiverConfig) -> None:
+    def __init__(self, input_dim: int, output_dim: int, config: SymDiffPerceiverConfig) -> None:
         super().__init__()
-        self.dim = dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
+        self.input_dim = input_dim  # dim of input tensor - i.e. xh: [bs, n_nodes, dim]
         self.config = config
         self.t_dim = t_emb_dim(config)
-        if config.n_pad > 0:
-            self.pad = nn.Parameter(torch.randn(1, config.n_pad))
+        self.output_dim = output_dim
+        self.input_embedder = nn.Linear(input_dim+self.t_dim, output_dim)
 
     @property
     def num_channels(self) -> int:
-        return self.dim + self.t_dim + self.config.n_pad
+        return self.output_dim
 
     def forward(self, inputs, t, attention_mask):  # we append t to inputs features here via ff and config - NOTE: expand should be fine
-        assert(inputs.shape[-1] == self.dim)
-        if self.config.n_pad > 0:
-            bs, seq_len, _ = inputs.shape
-            inputs = torch.cat([inputs, self.pad.expand(bs, seq_len, -1)], dim=-1)
-        inputs = concat_t_emb(self.config, inputs, t)
-        return inputs, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
+        assert(inputs.shape[-1] == self.input_dim)
+        input_emb = concat_t_emb(self.config, inputs, t)
+        input_emb = self.input_embedder(input_emb) 
+        return input_emb, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
+
+
+class DistancesPreprocessor(AbstractPreprocessor):
+
+    def __init__(self, in_node_nf: int, context_node_nf: int, output_dim: int, 
+                 config: SymDiffPerceiverConfig, n_dims: int = 3) -> None:
+        super().__init__()
+        self.in_node_nf = in_node_nf
+        self.context_node_nf = context_node_nf
+        self.config = config
+        self.n_dims = n_dims
+        self.t_dim = t_emb_dim(config)
+        self.output_dim = output_dim
+        #self.input_embedder = nn.Linear(input_dim+self.t_dim, output_dim)
+
+    @property
+    def num_channels(self) -> int:
+        return self.output_dim
+
+    def forward(self, inputs, t, attention_mask):  # we append t to inputs features here via ff and config - NOTE: expand should be fine
+        assert(inputs.shape[-1] == self.input_dim)
+        input_emb = concat_t_emb(self.config, inputs, t)
+        input_emb = self.input_embedder(input_emb) 
+        return input_emb, None, attention_mask  # inputs, modality_sizes, enc_attention_mask
 
 
 class IdentityPreprocessor(AbstractPreprocessor):
@@ -495,6 +517,8 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
         assert enc_attention_mask.shape == inputs.shape[:-1]  # assume shape [bs, n_nodes]
         assert self.input_preprocessor is not None
 
+        inputs_clone = inputs.clone()
+
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -537,7 +561,7 @@ class SymDiffPerceiver(PerceiverPreTrainedModel):  # could use multi-modal decod
         if self.decoder:
             output_modality_sizes = modality_sizes
             decoder_query = self.decoder.decoder_query(
-                inputs, t, modality_sizes=modality_sizes
+                inputs_clone, t, modality_sizes=modality_sizes
             )
             decoder_outputs = self.decoder(
                 decoder_query,
@@ -614,6 +638,10 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
         self,
         config: SymDiffPerceiverConfig,
         pos_num_channels: int,
+
+        input_dim: int,
+        decoder_hidden_size: int,
+
         output_num_channels: int,  # used if final_project
         index_dims: int = -1,
         qk_channels: Optional[int] = None,
@@ -633,10 +661,13 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
         self.output_num_channels = output_num_channels  # final channel output of decoder if using final_layer
         self.index_dims = index_dims  # to output matrix or node positions
 
-        if index_dims > 0:
-            self.position_embeddings = nn.Parameter(torch.randn(index_dims, pos_num_channels))
-        else:
-            self.position_embeddings = nn.Parameter(torch.randn(1, pos_num_channels))
+        #if index_dims > 0:
+        #    self.position_embeddings = nn.Parameter(torch.randn(index_dims, pos_num_channels))
+        #else:
+        #    self.position_embeddings = nn.Parameter(torch.randn(1, pos_num_channels))
+
+        self.decoder_hidden_size = decoder_hidden_size
+        self.query_embedder = nn.Linear(input_dim+self.t_dim, decoder_hidden_size)
 
         self.final_project = final_project
         self.decoder_self_attention = decoder_self_attention
@@ -669,19 +700,21 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
     def num_query_channels(self) -> int:  # channel of final output
         #if self.final_project:
         #    return self.output_num_channels
-        return self.pos_num_channels + self.t_dim
+        return self.decoder_hidden_size
 
     def decoder_query(self, inputs, t, modality_sizes=None):
         bs, seq_len, _ = inputs.shape
         query_index_dims = self.index_dims if self.index_dims > 0 else seq_len
 
         # Construct the position encoding.
-        pos_emb = self.position_embeddings.expand(bs, query_index_dims, -1)  # [bs, seq_len or 3, pos_num_channels]
-        pos_emb = concat_t_emb(self.config, pos_emb, t)  # add t_emb to channels
+        #pos_emb = self.position_embeddings.expand(bs, query_index_dims, -1)  # [bs, seq_len or 3, pos_num_channels]
+        #pos_emb = concat_t_emb(self.config, pos_emb, t)  # add t_emb to channels
+        query_emb = concat_t_emb(self.config, inputs, t)  # add t_emb to channels
+        query_emb = self.query_embedder(query_emb)
 
         # Optionally project them to a target dimension. Should be id
         #pos_emb = self.positions_projection(pos_emb)
-        return pos_emb
+        return query_emb
 
     def forward(
         self,

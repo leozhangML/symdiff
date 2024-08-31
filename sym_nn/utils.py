@@ -1,6 +1,7 @@
 import numpy as np
 
 import torch
+import torch.nn as nn
 
 
 def qr(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -98,3 +99,34 @@ def compute_gradient_norm(model):
     ]
     norm = torch.cat(grads).norm(p=2.0)
     return norm
+
+
+"""NOTE: from https://github.com/lsj2408/Transformer-M/tree/main"""
+
+@torch.jit.script
+def gaussian(x, mean, std):
+    pi = 3.14159
+    a = (2*pi) ** 0.5
+    return torch.exp(-0.5 * (((x - mean) / std) ** 2)) / (a * std)
+
+
+class GaussianLayer(nn.Module):
+    def __init__(self, K=128):
+        super().__init__()
+        self.K = K
+        self.means = nn.Embedding(1, K)
+        self.stds = nn.Embedding(1, K)
+        nn.init.uniform_(self.means.weight, 0, 3)
+        nn.init.uniform_(self.stds.weight, 0, 3)
+
+    def forward(self, x, node_mask):
+        # x: [bs, n_nodes, 3]
+        # node_mask: [bs, n_nodes, 1]
+        N = torch.sum(node_mask, dim=1, keepdim=True)  # [bs, 1, 1]
+        dist_mat = torch.cdist(x, x).unsqueeze(-1)  # [bs, n_nodes, n_nodes]
+        pos_emb = dist_mat.expand(-1, -1, -1, self.K)
+        mean = self.means.weight.float().view(-1)
+        std = self.stds.weight.float().view(-1).abs() + 1e-2
+        pos_emb = gaussian(pos_emb.float(), mean, std).type_as(self.means.weight)  # [bs, n_nodes, n_nodes, K]
+        pos_emb = pos_emb * node_mask[:, :, :, None] * node_mask[:, None, :, :]
+        return pos_emb

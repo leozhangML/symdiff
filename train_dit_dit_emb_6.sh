@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=edm_egnn_base_no_h_9
+#SBATCH --job-name=DiT_DiTEmb_mask_0
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -19,11 +19,12 @@
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=00-12:00:00  
+#SBATCH --time=12-00:00:00  
 #SBATCH --mem=32G  
 
 # Don't change unless you know why (look at examples and notes for more information)
 #SBATCH --ntasks=1
+
 
 echo "bruh"
 
@@ -47,14 +48,16 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 3000 --exp_name edm_egnn_base_no_h_9 --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 9 --lr 1e-4 \
-       --normalize_factors [1,4,10] \
-       --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
-       --save_model True --use_amsgrad --com_free --clipping_type queue \
-       --remove_h --filter_n_atoms 9
+python main_qm9.py --exp_name DiT_DiTEmb_mask_0 --model dit_dit_emb_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+                   --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
+                   --n_epochs 3000 --batch_size 256 --lr 5e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.999 \
+                   --weight_decay 1e-5 --use_amsgrad --normalize_factors [1,4,10] \
+                   --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
+                   --xh_hidden_size 184 --sigma 0.5 --m 64 \
+                   --enc_out_channels 0 --enc_hidden_size 128 --enc_depth 4 --enc_num_heads 8 --enc_mlp_ratio 1.0 --dec_hidden_features 64 \
+                   --hidden_size 384 --depth 12 --num_heads 8 --mlp_ratio 1.5 --mlp_dropout 0.1 \
+                   --noise_dims 3 --noise_std 1.0
 
-#python sym_nn/sym_nn.py
 date -u
 
 # script to run main.py

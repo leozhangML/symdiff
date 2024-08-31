@@ -1,11 +1,10 @@
 #!/bin/bash
-
 # Writing to /tmp directory of the node (faster, can mount to data/ziz afterwards)
 #SBATCH --output=/tmp/slurm-%j.out
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=edm_egnn_base_no_h_9
+#SBATCH --job-name=Perceiver_test
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -19,11 +18,12 @@
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=00-12:00:00  
+#SBATCH --time=12-00:00:00  
 #SBATCH --mem=32G  
 
 # Don't change unless you know why (look at examples and notes for more information)
 #SBATCH --ntasks=1
+
 
 echo "bruh"
 
@@ -47,14 +47,19 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 3000 --exp_name edm_egnn_base_no_h_9 --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 9 --lr 1e-4 \
-       --normalize_factors [1,4,10] \
-       --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
-       --save_model True --use_amsgrad --com_free --clipping_type queue \
-       --remove_h --filter_n_atoms 9
+python main_qm9.py --exp_name Perceiver_test --model perceiver_dynamics --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+                   --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
+                   --n_epochs 3000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.999 \
+                   --weight_decay 0.00001 --use_amsgrad --normalize_factors [1,4,10] \
+                   --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
+                   --context_hidden_size 512 \
+                   --k_num_latents 128 --k_d_latents 384 --k_num_blocks 1 --k_num_self_attends_per_block 12 --k_enc_mlp_factor 2  \
+                   --k_num_self_attention_heads 8 \
+                   --k_num_cross_attention_heads 8 --k_attention_probs_dropout_prob 0.1 --k_pos_num_channels 0 --k_num_heads 8 \
+                   --k_decoder_self_attention --k_num_self_heads 8 \
+                   --decoder_hidden_size 512 --k_query_residual \
+                   --num_bands 64 --max_resolution 0.001 \
 
-#python sym_nn/sym_nn.py
 date -u
 
 # script to run main.py

@@ -8,7 +8,8 @@ from egnn.models import EGNN_dynamics_QM9
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics, SymDiffPerceiverFourier_dynamics, \
                           Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics, GNN_GNN_dynamics, \
-                          GNN_DiT_dynamics, DiTMessage_dynamics
+                          GNN_DiT_dynamics, DiTMessage_dynamics, Perceiver_dynamics, DiTEmb_dynamics, DiT_DitEmb_dynamics, \
+                          DiTGaussian_dynamics, DiT_DitGaussian_dynamics, DiTOnlyGaussian_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -268,6 +269,166 @@ def get_model(args, device, dataset_info, dataloader_train):
             n_dims=3,
             device=device
         )
+
+    elif args.model == "perceiver_dynamics":
+
+        net_dynamics = Perceiver_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            context_hidden_size=args.context_hidden_size,
+
+            k_num_latents=args.k_num_latents,
+            k_d_latents=args.k_d_latents,
+            k_num_blocks=args.k_num_blocks,
+            k_num_self_attends_per_block=args.k_num_self_attends_per_block,
+            k_num_self_attention_heads=args.k_num_self_attention_heads,
+            k_num_cross_attention_heads=args.k_num_cross_attention_heads,
+            k_attention_probs_dropout_prob=args.k_attention_probs_dropout_prob,
+            k_enc_mlp_factor=args.k_enc_mlp_factor,
+
+            k_pos_num_channels=args.k_pos_num_channels,
+            k_num_heads=args.k_num_heads,
+            k_decoder_self_attention=args.k_decoder_self_attention,
+            k_num_self_heads=args.k_num_self_heads,
+            k_query_residual=args.k_query_residual,
+
+            decoder_hidden_size=args.decoder_hidden_size,
+
+            num_bands=args.num_bands,
+            max_resolution=args.max_resolution,
+            use_pos_embed=True,
+            concat_t=args.concat_t,
+
+            n_dims=3,
+            device=device
+        )
+
+    elif args.model == "dit_emb_dynamics":
+
+        net_dynamics = DiTEmb_dynamics(
+            args,
+            in_node_nf=in_node_nf, 
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            sigma=args.sigma,
+            m=args.m,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            n_dims=3,
+            device=device
+        )
+
+    elif args.model == "dit_dit_emb_dynamics":
+
+        net_dynamics = DiT_DitEmb_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            sigma=args.sigma,
+            m=args.m,
+
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+            dec_hidden_features=args.dec_hidden_features,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            enc_concat_h=args.enc_concat_h,
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            n_dims=3,
+            device=device
+        )
+
+    elif args.model == "dit_gaussian_dynamics":
+
+        net_dynamics = DiTGaussian_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            K=args.K,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            n_dims=3,
+            device=device
+        )
+
+    elif args.model == "dit_only_gaussian_dynamics":
+
+        net_dynamics = DiTOnlyGaussian_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+            
+            h_hidden_size=args.xh_hidden_size,  # NOTE: using xh_hidden_size instead
+            K=args.K,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            n_dims=3,
+            device=device
+        )
+
+    elif args.model == "dit_dit_gaussian_dynamics":
+
+        net_dynamics = DiT_DitGaussian_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            K=args.K,
+
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+            dec_hidden_features=args.dec_hidden_features,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            enc_concat_h=args.enc_concat_h,
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            n_dims=3,
+            device=device
+        )
+    
+    else:
+        raise ValueError
 
     if args.probabilistic_model == 'diffusion':
         vdm = EnVariationalDiffusion(

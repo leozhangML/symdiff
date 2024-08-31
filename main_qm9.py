@@ -144,6 +144,8 @@ parser.add_argument("--print_parameter_count", action="store_true", help="whethe
 
 # -------- sym_diff perceiver args -------- #
 
+parser.add_argument("--context_hidden_size", type=int, default=512, help="preprocessor config for perceiver")
+
 parser.add_argument("--gamma_num_latents", type=int, default=64, help="gamma config for perceiver")
 parser.add_argument("--gamma_d_latents", type=int, default=128, help="gamma config for perceiver")
 parser.add_argument("--gamma_n_pad", type=int, default=61, help="gamma config for perceiver")
@@ -163,10 +165,15 @@ parser.add_argument("--k_num_self_attends_per_block", type=int, default=10, help
 parser.add_argument("--k_num_self_attention_heads", type=int, default=4, help="k config for perceiver")
 parser.add_argument("--k_num_cross_attention_heads", type=int, default=4, help="k config for perceiver")
 parser.add_argument("--k_attention_probs_dropout_prob", type=float, default=0.1, help="k config for perceiver")
+parser.add_argument("--k_enc_mlp_factor", type=int, default=2, help="k config for perceiver")
+
 parser.add_argument("--k_pos_num_channels", type=int, default=64, help="k config for perceiver")
 parser.add_argument("--k_num_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--no_k_decoder_self_attention", action="store_false", help="k config for perceiver")
+parser.add_argument("--k_decoder_self_attention", action="store_true", help="k config for perceiver")
 parser.add_argument("--k_num_self_heads", type=int, default=4, help="k config for perceiver")
+parser.add_argument("--k_query_residual", action="store_true", help="k config for perceiver")
+
+parser.add_argument("--decoder_hidden_size", type=int, default=256, help="k config for perceiver")
 
 # -------- sym_diff transformer args -------- #
 
@@ -229,6 +236,15 @@ parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for 
 parser.add_argument("--gamma_gnn_hidden_size", type=int, default=64, help="config for GNN_GNN")
 parser.add_argument("--gamma_gnn_out_size", type=int, default=64, help="config for GNN_GNN")
 parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="config for GNN_GNN")
+
+# -------- DiTEmb args -------- #
+
+parser.add_argument("--xh_hidden_size", type=int, default=128, help="config for DiTEmb")
+parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for DiTEmb")
+
+# -------- DiTGaussian args -------- #
+
+parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
 
 # -------- sym_diff time args -------- #
 
