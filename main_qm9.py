@@ -195,6 +195,11 @@ parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for t
 parser.add_argument("--sigma", type=float, default=100, help="config for perceiver fourier")
 parser.add_argument("--m", type=int, default=20, help="config for perceiver fourier")
 
+# -------- perceiver_gaussian args -------- #
+
+parser.add_argument("--pos_emb_size", type=int, default=256, help="config for perceiver fourier")
+parser.add_argument("--k_mlp_factor", type=int, default=2, help="config for perceiver fourier")
+
 # -------- transformer args -------- #
 
 parser.add_argument("--trans_num_layers", type=int, default=6, help="config for transformer")

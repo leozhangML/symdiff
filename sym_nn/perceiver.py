@@ -637,13 +637,11 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
     def __init__(
         self,
         config: SymDiffPerceiverConfig,
-        pos_num_channels: int,
 
         input_dim: int,
         decoder_hidden_size: int,
 
         output_num_channels: int,  # used if final_project
-        index_dims: int = -1,
         qk_channels: Optional[int] = None,
         v_channels: Optional[int] = None,
         num_heads: Optional[int] = 1,
@@ -657,14 +655,7 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
 
         self.config = config
         self.t_dim = t_emb_dim(self.config)
-        self.pos_num_channels = pos_num_channels  # number of query channels before adding t_emb
         self.output_num_channels = output_num_channels  # final channel output of decoder if using final_layer
-        self.index_dims = index_dims  # to output matrix or node positions
-
-        #if index_dims > 0:
-        #    self.position_embeddings = nn.Parameter(torch.randn(index_dims, pos_num_channels))
-        #else:
-        #    self.position_embeddings = nn.Parameter(torch.randn(1, pos_num_channels))
 
         self.decoder_hidden_size = decoder_hidden_size
         self.query_embedder = nn.Linear(input_dim+self.t_dim, decoder_hidden_size)
@@ -698,22 +689,11 @@ class SymDiffPerceiverDecoder(PerceiverAbstractDecoder):
 
     @property
     def num_query_channels(self) -> int:  # channel of final output
-        #if self.final_project:
-        #    return self.output_num_channels
         return self.decoder_hidden_size
 
-    def decoder_query(self, inputs, t, modality_sizes=None):
-        bs, seq_len, _ = inputs.shape
-        query_index_dims = self.index_dims if self.index_dims > 0 else seq_len
-
-        # Construct the position encoding.
-        #pos_emb = self.position_embeddings.expand(bs, query_index_dims, -1)  # [bs, seq_len or 3, pos_num_channels]
-        #pos_emb = concat_t_emb(self.config, pos_emb, t)  # add t_emb to channels
+    def decoder_query(self, inputs, t, modality_sizes=None):  # inputs: [bs, n_nodes, dims]
         query_emb = concat_t_emb(self.config, inputs, t)  # add t_emb to channels
         query_emb = self.query_embedder(query_emb)
-
-        # Optionally project them to a target dimension. Should be id
-        #pos_emb = self.positions_projection(pos_emb)
         return query_emb
 
     def forward(

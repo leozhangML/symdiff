@@ -1,11 +1,10 @@
 #!/bin/bash
-
 # Writing to /tmp directory of the node (faster, can mount to data/ziz afterwards)
 #SBATCH --output=/tmp/slurm-%j.out
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiTGaussian_mlp4
+#SBATCH --job-name=PerceiverGaussian
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -48,16 +47,20 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_mlp4 --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name PerceiverGaussian --model perceiver_gaussian_dynamics --dataset qm9  --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
-                   --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
+                   --weight_decay 0.00001 --use_amsgrad --normalize_factors [1,4,10] \
                    --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
-                   --xh_hidden_size 184 --K 184 \
+                   --pos_emb_size 256 --K 256 \
                    --enc_hidden_size 128 --enc_depth 6 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 \
-                   --hidden_size 384 --depth 12 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
-                   --noise_dims 3 --noise_std 1.0 \
-                   --print_parameter_count 
+                   --context_hidden_size 512 \
+                   --k_num_latents 128 --k_d_latents 384 --k_num_blocks 2 --k_num_self_attends_per_block 6 \
+                   --k_num_self_attention_heads 8 --k_num_cross_attention_heads 8 --k_attention_probs_dropout_prob 0.1 \
+                   --k_mlp_factor 2 \
+                   --k_num_heads 8 --k_decoder_self_attention --k_num_self_heads 8 --k_query_residual \
+                   --decoder_hidden_size 512 \
+                   --num_bands 64 --max_resolution 0.001 \
 
 date -u
 
