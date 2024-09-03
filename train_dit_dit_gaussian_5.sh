@@ -5,22 +5,22 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiTGaussian_SwiGLU_wd
+#SBATCH --job-name=DiT_DiTGaussian_mlp4_small_gamma
 
-# Using thet cluster srf_gpu_01 and node 6
+# Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
-#SBATCH --partition=high-bigbayes-test
+#SBATCH --partition=high-bigbayes-gpu
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
 #SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
-#NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
+#SBATCH --nodelist=zizgpu05.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
 #SBATCH --time=12-00:00:00  
-#SBATCH --mem=42G  
+#SBATCH --mem=52G  
 
 # Don't change unless you know why (look at examples and notes for more information)
 #SBATCH --ntasks=1
@@ -48,14 +48,13 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_SwiGLU_wd --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name DiT_DiTGaussian_mlp4_small_gamma --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
                    --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
                    --xh_hidden_size 184 --K 184 \
-                   --mlp_type swiglu \
-                   --enc_hidden_size 128 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 \
+                   --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 32 \
                    --hidden_size 384 --depth 12 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
                    --noise_dims 3 --noise_std 1.0 \
                    --print_parameter_count 

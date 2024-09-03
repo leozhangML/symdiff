@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=edm_egnn_base_no_h_9
+#SBATCH --job-name=edm_egnn_base
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01

@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=qm9_9_4m
+#SBATCH --job-name=edm_egnn_base_0
 
 # Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
@@ -13,7 +13,7 @@
 #SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
-#SBATCH --cpus-per-task=12
+#SBATCH --cpus-per-task=4
 
 # This is useful for selecting the particular nodes that you want
 #SBATCH --nodelist=zizgpu05.cpu.stats.ox.ac.uk
@@ -47,8 +47,8 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 1000 --exp_name edm_9_4_m --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
-       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 16 --lr 1e-4 --normalize_factors [1,4,10] \
+python main_qm9.py --n_epochs 3000 --exp_name edm_egnn_base_0 --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
+       --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 9 --lr 1e-4 --normalize_factors [1,4,10] \
         --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
         --save_model True
 date -u

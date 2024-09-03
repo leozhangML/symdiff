@@ -235,6 +235,10 @@ parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_
 parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_GNN")
 parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_GNN")
 
+# -------- DiTGaussian_GNN args -------- #
+
+parser.add_argument("--pos_size", type=int, default=128, help="config for DiTGaussian_GNN")
+
 # -------- GNN_DiT args -------- #
 
 parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for GNN_GNN")
@@ -250,6 +254,7 @@ parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for D
 # -------- DiTGaussian args -------- #
 
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
+parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
 
 # -------- sym_diff time args -------- #
 

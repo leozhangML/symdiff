@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import math
-from timm.models.vision_transformer import Mlp
+from timm.models.vision_transformer import Mlp, SwiGLUPacked
 from torch.jit import Final
 import torch.nn.functional as F
 
@@ -166,14 +166,17 @@ class DiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, mlp_dropout=0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, mlp_dropout=0, mlp_type="mlp", **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         approx_gelu = lambda: nn.GELU(approximate="tanh")
-        self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=mlp_dropout)
+        if mlp_type == "mlp":
+            self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=mlp_dropout)
+        elif mlp_type == "swiglu":
+            self.mlp = SwiGLUPacked(in_features=hidden_size, hidden_features=mlp_hidden_dim, drop=mlp_dropout)
         self.adaLN_modulation = nn.Sequential(
             nn.SiLU(),
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
@@ -222,22 +225,25 @@ class DiT(nn.Module):
         use_fused_attn=False,
         x_emb="fourier",
         tau=1.0,
-        input_dim=9
+        input_dim=9,
+        mlp_type="mlp"
     ):
         super().__init__()
+
         self.out_channels = out_channels
         self.hidden_size = hidden_size
         self.num_heads = num_heads
+        self.mlp_type = mlp_type
 
         self.x_emb = x_emb
         if x_emb == "fourier":
             self.x_embedder = PositionEmbedder(hidden_size, x_scale)
         elif x_emb == "linear":
-            self.x_embedder = nn.Linear(input_dim, hidden_size)  # hard code for now
+            self.x_embedder = nn.Linear(input_dim, hidden_size)
         elif x_emb == "learnable_fourier":
             self.tau = tau
             self.x_embedder = FourierEmbedder(input_dim, hidden_size, 
-                                              frequency_embedding_size=256)  # hard code for now
+                                              frequency_embedding_size=256)
         elif x_emb == "cat_learnable_fourier":
             self.tau = tau
             self.x_embedder = FourierEmbedder(input_dim, hidden_size - input_dim, 
@@ -252,7 +258,8 @@ class DiT(nn.Module):
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio, 
                      mlp_dropout=mlp_dropout,
-                     use_fused_attn=use_fused_attn) 
+                     use_fused_attn=use_fused_attn, 
+                     mlp_type=mlp_type) 
             for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, out_channels)
@@ -286,6 +293,10 @@ class DiT(nn.Module):
         nn.init.constant_(self.final_layer.linear.weight, 0)
         nn.init.constant_(self.final_layer.linear.bias, 0)
 
+        if self.mlp_type == "swiglu":
+            for block in self.blocks:
+                block.mlp.init_weights()
+
     def forward(self, x, t, attn_mask, use_final_layer=True):
         """
         Forward pass of DiT.
@@ -307,3 +318,6 @@ class DiT(nn.Module):
             x = self.final_layer(x, c)               # (N, T, out_channels)
         return x
 
+
+if __name__ == "__main__":
+    print(1)
