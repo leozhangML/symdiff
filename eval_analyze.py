@@ -141,6 +141,9 @@ def main():
         args.normalization_factor = 1
     if not hasattr(args, 'aggregation_method'):
         args.aggregation_method = 'sum'
+    if not hasattr(args, 'mlp_type'):  # LEO
+        print("mlp_type not found!")
+        args.mlp_type = 'mlp'
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")

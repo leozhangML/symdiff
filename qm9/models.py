@@ -10,7 +10,7 @@ from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics
                           Transformer_dynamics, DiT_dynamics, DiT_GNN_dynamics, DiT_DiT_dynamics, GNN_GNN_dynamics, \
                           GNN_DiT_dynamics, DiTMessage_dynamics, Perceiver_dynamics, DiTEmb_dynamics, DiT_DitEmb_dynamics, \
                           DiTGaussian_dynamics, DiT_DitGaussian_dynamics, DiTOnlyGaussian_dynamics, PercieverGaussian_dynamics, \
-                          DiTGaussian_GNN_dynamics
+                          DiTGaussian_GNN_dynamics, PercieverGaussian_final_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -481,6 +481,57 @@ def get_model(args, device, dataset_info, dataloader_train):
             device=device
         )
 
+    elif args.model == "perceiver_gaussian_final_dynamics":
+
+        net_dynamics = PercieverGaussian_final_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            # pos_emb
+            pos_emb_size=args.pos_emb_size,
+            K=args.K,
+
+            # DiT gamma
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+            dec_hidden_features=args.dec_hidden_features,
+
+            # Perceiver context
+            context_hidden_size=args.context_hidden_size,
+
+            k_num_latents=args.k_num_latents,
+            k_d_latents=args.k_d_latents,
+            k_num_blocks=args.k_num_blocks,
+            k_num_self_attends_per_block=args.k_num_self_attends_per_block,
+            k_num_self_attention_heads=args.k_num_self_attention_heads,
+            k_num_cross_attention_heads=args.k_num_cross_attention_heads,
+            k_attention_probs_dropout_prob=args.k_attention_probs_dropout_prob,
+            k_mlp_factor=args.k_mlp_factor,
+
+            # Perceiver decoder
+            k_num_heads=args.k_num_heads,
+            k_decoder_self_attention=args.k_decoder_self_attention,
+            k_num_self_heads=args.k_num_self_heads,
+            k_query_residual=args.k_query_residual,
+
+            decoder_hidden_size=args.decoder_hidden_size,
+
+            # t_emb args
+            num_bands=args.num_bands,
+            max_resolution=args.max_resolution,
+            concat_t=args.concat_t,
+
+            # gamma noise
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            n_dims=3,
+            device=device
+        )
+
     elif args.model == "dit_gaussian_gnn_dynamics":
 
         net_dynamics = DiTGaussian_GNN_dynamics(
@@ -520,7 +571,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             noise_precision=args.diffusion_noise_precision,
             loss_type=args.diffusion_loss_type,
             norm_values=args.normalize_factors,
-            include_charges=args.include_charges
+            include_charges=args.include_charges,
+            com_free=args.com_free
             )
 
         return vdm, nodes_dist, prop_dist

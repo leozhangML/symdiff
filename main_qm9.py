@@ -283,18 +283,19 @@ dtype = torch.float32
 if args.resume is not None:
     exp_name = args.exp_name + '_resume'
     start_epoch = args.start_epoch
-    resume = args.resume
+    resume = args.resume  # resume this dir
     wandb_usr = args.wandb_usr
     normalization_factor = args.normalization_factor
     aggregation_method = args.aggregation_method
+    mlp_type = args.mlp_type  # LEO
 
-    with open(join(args.resume, 'args.pickle'), 'rb') as f:
+    with open(join('outputs', args.resume, 'args.pickle'), 'rb') as f:
         args = pickle.load(f)
 
     args.resume = resume
     args.break_train_epoch = False
 
-    args.exp_name = exp_name
+    args.exp_name = exp_name  # new exp_name
     args.start_epoch = start_epoch
     args.wandb_usr = wandb_usr
 
@@ -303,6 +304,9 @@ if args.resume is not None:
         args.normalization_factor = normalization_factor
     if not hasattr(args, 'aggregation_method'):
         args.aggregation_method = aggregation_method
+    if not hasattr(args, 'mlp_type'):
+        print("mlp_type is not found!")
+        args.mlp_type = mlp_type
 
     print(args)
 
@@ -364,12 +368,14 @@ def check_mask_correct(variables, node_mask):
 
 def main():
     if args.resume is not None:
-        flow_state_dict = torch.load(join(args.resume, 'flow.npy'))  # for vdm
-        optim_state_dict = torch.load(join(args.resume, 'optim.npy'))
-        scheduler_state_dict = torch.load(join(args.resume, 'scheduler.npy'))
+        #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
+        flow_state_dict = torch.load(join('outputs', args.resume, 'generative_model.npy'))  # for vdm
+        optim_state_dict = torch.load(join('outputs', args.resume, 'optim.npy'))
         model.load_state_dict(flow_state_dict)
         optim.load_state_dict(optim_state_dict)
-        scheduler.load_state_dict(scheduler_state_dict)
+        if args.scheduler is not None:
+            scheduler_state_dict = torch.load(join('outputs', args.resume, 'scheduler.npy'))
+            scheduler.load_state_dict(scheduler_state_dict)
 
     # Initialize dataparallel if enabled and possible.
     if args.dp and torch.cuda.device_count() > 1:
@@ -384,10 +390,16 @@ def main():
         model_ema = copy.deepcopy(model)
         ema = flow_utils.EMA(args.ema_decay)
 
+        # NOTE: LEO
+        if args.resume is not None:
+            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
+            model_ema.load_state_dict(ema_state_dict)
+
         if args.dp and torch.cuda.device_count() > 1:
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
             model_ema_dp = model_ema
+        
     else:
         ema = None
         model_ema = model
@@ -395,6 +407,8 @@ def main():
 
     best_nll_val = 1e8
     best_nll_test = 1e8
+
+    best_mol_stable = 0
 
     for epoch in range(args.start_epoch, args.n_epochs):
         wandb.log({"Epoch": epoch}, commit=True)
@@ -417,9 +431,10 @@ def main():
                 wandb.log(model.log_info(), commit=True)  # should be constant for l2
             if not args.break_train_epoch:  # for debug
                 # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
-                analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
+                validity_dict = analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
                                  dataset_info=dataset_info, device=device,
                                  prop_dist=prop_dist, n_samples=args.n_stability_samples)
+                mol_stable = validity_dict["mol_stable"]
             # compute average nll over the val/test set
             nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
                            partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
@@ -428,7 +443,7 @@ def main():
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
-            if nll_val < best_nll_val:
+            if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
                 best_nll_val = nll_val
                 best_nll_test = nll_test
                 if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
@@ -440,6 +455,18 @@ def main():
                     if args.ema_decay > 0:
                         utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
+                        pickle.dump(args, f)
+
+            # NOTE: added to save best model on mol stable
+            if mol_stable > best_mol_stable:
+                if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
+                    utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
+                    utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
+                    if scheduler is not None:
+                        utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
+                    if args.ema_decay > 0:
+                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
+                    with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
                 # ???
