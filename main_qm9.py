@@ -139,6 +139,10 @@ parser.add_argument('--aggregation_method', type=str, default='sum',
 
 parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
 parser.add_argument("--com_free", action="store_true", help="whether to use the CoM subspace")
+parser.add_argument("--rho", type=float, default=3, help="VE schedule")
+parser.add_argument("--sigma_min", type=float, default=1e-5, help="VE schedule")
+parser.add_argument("--sigma_max", type=float, default=10, help="VE schedule")
+
 parser.add_argument("--print_grad_norms", action="store_true", help="whether to show the gamma and k grad norms")
 parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
