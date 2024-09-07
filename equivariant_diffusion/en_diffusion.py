@@ -691,38 +691,42 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Sample zt ~ Normal(alpha_t x, sigma_t)
         eps = self.sample_combined_position_feature_noise(
-            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask)  # [bs, n_nodes, dims] - masks out non-atom indexes
+            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=self.com_free)  # [bs, n_nodes, dims] - masks out non-atom indexes
 
         # Concatenate x, h[integer] and h[categorical].
         xh = torch.cat([x, h['categorical'], h['integer']], dim=2)  # [bs, n_nodes, dims]
         # Sample z_t given x, h for timestep t, from q(z_t | x, h)
         z_t = alpha_t * xh + sigma_t * eps
 
-        diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)  # NOTE
+        if self.com_free:
+            diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)
 
         # Neural net prediction.
-        net_out = self.phi(z_t, t, node_mask, edge_mask, context)  # NOTE
+        net_out = self.phi(z_t, t, node_mask, edge_mask, context)
 
         # Compute the error.
-        error = self.compute_error(net_out, gamma_t, eps)  # NOTE: change for different parametrisation, [bs]
+        error = self.compute_error(net_out, gamma_t, eps)  # [bs]
 
         if self.training and self.loss_type == 'l2':
             SNR_weight = torch.ones_like(error)
         else:
             # Compute weighting with SNR: (SNR(s-t) - 1) for epsilon parametrization.
-            SNR_weight = (self.SNR(gamma_s - gamma_t) - 1).squeeze(1).squeeze(1)
+            if self.com_free:
+                SNR_weight = (self.SNR(gamma_s - gamma_t) - 1).squeeze(1).squeeze(1)
+            else:
+                SNR_weight = (torch.exp(-gamma_s[1]+gamma_t[1]) - 1).squeeze(1).squeeze(1)
         assert error.size() == SNR_weight.size()
-        loss_t_larger_than_zero = 0.5 * SNR_weight * error  # NOTE: change for different parametrisation
+        loss_t_larger_than_zero = 0.5 * SNR_weight * error
 
         # The _constants_ depending on sigma_0 from the
         # cross entropy term E_q(z0 | x) [log p(x | z0)].
-        neg_log_constants = -self.log_constants_p_x_given_z0(x, node_mask)  # NOTE: change for new approach, [bs]
+        neg_log_constants = -self.log_constants_p_x_given_z0(x, node_mask)  # [bs]
 
         # Reset constants during training with l2 loss.
         if self.training and self.loss_type == 'l2':
             neg_log_constants = torch.zeros_like(neg_log_constants)
 
-        # The KL between q(z1 | x) and p(z1) = Normal(0, 1). Should be close to zero.
+        # The KL between q(z1 | x) and p(z1) = Normal(0, 1). Should be close to zero. NOTE: changed for CoM
         kl_prior = self.kl_prior(xh, node_mask)  # [bs]
 
         # Combining the terms

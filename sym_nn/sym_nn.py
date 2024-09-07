@@ -2034,7 +2034,11 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
+
         x = remove_mean_with_mask(x, node_mask)
+        if self.args.com_free:
+            pass  # NOTE: add EDM stuff
+
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
