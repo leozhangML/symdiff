@@ -562,6 +562,10 @@ def get_model(args, device, dataset_info, dataloader_train):
         raise ValueError
 
     if args.probabilistic_model == 'diffusion':
+
+        if args.com_free is False:
+            print("Not using CoM-free systems!")
+
         vdm = EnVariationalDiffusion(
             dynamics=net_dynamics,
             in_node_nf=in_node_nf,
@@ -572,7 +576,11 @@ def get_model(args, device, dataset_info, dataloader_train):
             loss_type=args.diffusion_loss_type,
             norm_values=args.normalize_factors,
             include_charges=args.include_charges,
-            com_free=args.com_free
+
+            com_free=args.com_free,
+            rho=args.rho,
+            sigma_min=args.sigma_min,
+            sigma_max=args.sigma_max
             )
 
         return vdm, nodes_dist, prop_dist

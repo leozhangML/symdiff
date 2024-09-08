@@ -281,6 +281,7 @@ atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+#args.cuda = False
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 
@@ -430,9 +431,11 @@ def main():
                     gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
-        if epoch % args.test_epochs == 0 and epoch != 0:
-            if isinstance(model, en_diffusion.EnVariationalDiffusion): 
-                wandb.log(model.log_info(), commit=True)  # should be constant for l2
+        #if epoch % args.test_epochs == 0 and epoch != 0:  # NOTE: LEO
+        if epoch % args.test_epochs == 0:
+            if isinstance(model, en_diffusion.EnVariationalDiffusion):
+                if args.com_free:
+                    wandb.log(model.log_info(), commit=True)  # should be constant for l2
             if not args.break_train_epoch:  # for debug
                 # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
                 validity_dict = analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,

@@ -1047,6 +1047,7 @@ class PercieverGaussian_final_dynamics(nn.Module):
 
         print(f"embedder_params: {embedder_params}; gamma_params: {gamma_params}; k_params: {k_params}")
 
+
 class Transformer_dynamics(nn.Module):
 
     def __init__(
@@ -2021,7 +2022,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def _forward(self, t, xh, node_mask, edge_mask, context):
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):
         # t: [bs, 1]
         # xh: [bs, n_nodes, dims]
         # node_mask: [bs, n_nodes, 1]
@@ -2036,8 +2037,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
         h = xh[:, :, self.n_dims:]
 
         x = remove_mean_with_mask(x, node_mask)
-        if self.args.com_free:
-            pass  # NOTE: add EDM stuff
+        if not self.args.com_free:
+            assert gamma is not None
+            # Karras et al. (2022) scaling
+            x = x / torch.sqrt(
+                self.args.sigma_data**2 + 
+                torch.exp(gamma[1]).unsqueeze(-1)
+                )
 
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 

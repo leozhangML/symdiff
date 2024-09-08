@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=edm_egnn_base_0
+#SBATCH --job-name=edm_egnn_base_1
 
 # Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
@@ -47,10 +47,10 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --n_epochs 3000 --exp_name edm_egnn_base_0 --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
+python main_qm9.py --n_epochs 3000 --exp_name edm_egnn_base_1 --model egnn_dynamics --n_stability_samples 500 --diffusion_noise_schedule polynomial_2 \
        --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --batch_size 64 --nf 256 --n_layers 9 --lr 1e-4 --normalize_factors [1,4,10] \
         --test_epochs 20 --ema_decay 0.9999 --wandb_usr zhangleo1209 --dataset qm9  --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
-        --save_model True
+        --save_model True --com_free
 date -u
 
 # script to run main.py

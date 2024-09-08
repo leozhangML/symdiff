@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiTGaussian_mlp4_resume_resume
+#SBATCH --job-name=DiT_DiTGaussian_SwiGLU_wd_resume
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -47,8 +47,8 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --resume DiT_DiTGaussian_mlp4_resume --exp_name DiT_DiTGaussian_mlp4_resume \
-                   --start_epoch 4471 \
+python main_qm9.py --resume DiT_DiTGaussian_SwiGLU_wd --exp_name DiT_DiTGaussian_SwiGLU_wd \
+                   --start_epoch 3500 \
                    --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \

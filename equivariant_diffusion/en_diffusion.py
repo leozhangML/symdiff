@@ -216,19 +216,20 @@ class PredefinedNoiseSchedule(torch.nn.Module):  # for gammas in SNR - for VP
 class VENoiseSchedule(torch.nn.Module):
 
     def __init__(self, timesteps, rho, sigma_min, sigma_max):
-        super(VENoiseSchedule, self).__init__()
+        super().__init__()
         self.timesteps = timesteps
         self.rho = rho
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
 
         self.log_alphas = torch.nn.Parameter(  # check shapes
-            torch.zeros([timesteps]),
+            torch.zeros([timesteps+1]),
             requires_grad=False
         )
+        # need to use timesteps+1??? as we sample in {0, ..., T}
         self.log_sigmas2 = torch.nn.Parameter(
             torch.log(
-                ve_schedule(timesteps, rho=rho, 
+                ve_schedule(timesteps+1, rho=rho, 
                             sigma_min=sigma_min, 
                             sigma_max=sigma_max)),
             requires_grad=False
@@ -309,6 +310,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         assert parametrization == 'eps'  # experiment with this
 
         self.com_free = com_free
+        self.sigma_max = sigma_max
         if noise_schedule == 'learned':
             self.gamma = GammaNetwork()
         else:
@@ -351,7 +353,10 @@ class EnVariationalDiffusion(torch.nn.Module):
                 f'1 / norm_value = {1. / max_norm_value}')
 
     def phi(self, x, t, node_mask, edge_mask, context):
-        net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
+        if self.com_free:
+            net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
+        else:
+            net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context, gamma=self.gamma(t))
         return net_out
 
     def inflate_batch_array(self, array, target):
@@ -459,7 +464,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         else:
             bs = len(gamma_t[0])
-            alpha_t_given_s = self.inflate_batch_array(torch.ones([bs]), target_tensor)
+            alpha_t_given_s = self.inflate_batch_array(torch.ones([bs], device=target_tensor.device), target_tensor)
             sigma2_t_given_s = self.inflate_batch_array(
                 torch.exp(gamma_t[1]) - torch.exp(gamma_s[1]),
                 target_tensor
@@ -498,6 +503,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             kl_distance_x = gaussian_KL_for_dimension(mu_T_x, sigma_T_x, zeros, ones, d=subspace_d)
 
         else:
+            # we compare against N(0, \sigma_T^2)
             # Compute KL for h-part.
             zeros = torch.zeros_like(mu_T_h)
             kl_distance_h = gaussian_KL(mu_T_h, sigma_T_h, zeros, sigma_T_h, node_mask)
@@ -566,7 +572,10 @@ class EnVariationalDiffusion(torch.nn.Module):
         zeros = torch.zeros(size=(z0.size(0), 1), device=z0.device)  
         gamma_0 = self.gamma(zeros)  # [bs, 1]
         # Computes sqrt(sigma_0^2 / alpha_0^2)
-        sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs]
+        if self.com_free:
+            sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs]
+        else:
+            sigma_x = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
         net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
         # Compute mu for p(zs | zt).
@@ -576,8 +585,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         x = xh[:, :, :self.n_dims]
 
-        if self.com_free:
-            x = utils.remove_mean_with_mask(x, node_mask)  # NOTE: LEO check this - should be fine as log_pxh_given_z0_without_constants doesn't use x directly
+        x = utils.remove_mean_with_mask(x, node_mask)  # NOTE: LEO check this - should be fine as log_pxh_given_z0_without_constants doesn't use x directly
 
         h_int = z0[:, :, -1:] if self.include_charges else torch.zeros(0).to(z0.device)
         x, h_cat, h_int = self.unnormalize(x, z0[:, :, self.n_dims:-1], h_int, node_mask)  # back to original scale
@@ -714,7 +722,8 @@ class EnVariationalDiffusion(torch.nn.Module):
             if self.com_free:
                 SNR_weight = (self.SNR(gamma_s - gamma_t) - 1).squeeze(1).squeeze(1)
             else:
-                SNR_weight = (torch.exp(-gamma_s[1]+gamma_t[1]) - 1).squeeze(1).squeeze(1)
+                #SNR_weight = (torch.exp(-gamma_s[1]+gamma_t[1]) - 1).squeeze(1).squeeze(1)
+                SNR_weight = expm1(-gamma_s[1]+gamma_t[1]).squeeze(1).squeeze(1)
         assert error.size() == SNR_weight.size()
         loss_t_larger_than_zero = 0.5 * SNR_weight * error
 
@@ -743,7 +752,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
             # Sample z_0 given x, h for timestep t, from q(z_t | x, h)
             eps_0 = self.sample_combined_position_feature_noise(
-                n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask)
+                n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=self.com_free)
             z_0 = alpha_0 * xh + sigma_0 * eps_0
 
             net_out = self.phi(z_0, t_zeros, node_mask, edge_mask, context)
@@ -828,6 +837,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         if self.com_free:
             diffusion_utils.assert_mean_zero_with_mask(zt[:, :, :self.n_dims], node_mask)
             diffusion_utils.assert_mean_zero_with_mask(eps_t[:, :, :self.n_dims], node_mask)
+
         mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t
 
         # Compute sigma for p(zs | zt).
@@ -837,7 +847,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         zs = self.sample_normal(mu, sigma, node_mask, fix_noise, com_free=self.com_free)
 
         if self.com_free:
-            # Project down to avoid numerical runaway of the center of gravity. - ???
+            # Project down to avoid numerical runaway of the center of gravity.
             zs = torch.cat(
                 [diffusion_utils.remove_mean_with_mask(zs[:, :, :self.n_dims],
                                                        node_mask),
@@ -871,11 +881,14 @@ class EnVariationalDiffusion(torch.nn.Module):
         """
         if fix_noise:
             # Noise is broadcasted over the batch axis, useful for visualizations.
-            z = self.sample_combined_position_feature_noise(1, n_nodes, node_mask)
+            z = self.sample_combined_position_feature_noise(1, n_nodes, node_mask, com_free=self.com_free)
         else:
-            z = self.sample_combined_position_feature_noise(n_samples, n_nodes, node_mask)
+            z = self.sample_combined_position_feature_noise(n_samples, n_nodes, node_mask, com_free=self.com_free)
 
-        diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
+        if self.com_free:
+            diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
+        else:
+            z = self.sigma_max * z
 
         # Iteratively sample p(z_s | z_t) for t = 1, ..., T, with s = t - 1.
         for s in reversed(range(0, self.T)):
@@ -887,7 +900,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             z = self.sample_p_zs_given_zt(s_array, t_array, z, node_mask, edge_mask, context, fix_noise=fix_noise)
 
         # Finally sample p(x, h | z_0).
-        x, h = self.sample_p_xh_given_z0(z, node_mask, edge_mask, context, fix_noise=fix_noise)
+        x, h = self.sample_p_xh_given_z0(z, node_mask, edge_mask, context, fix_noise=fix_noise)  # we remove the mean even for com_free=False
 
         diffusion_utils.assert_mean_zero_with_mask(x, node_mask)
 
@@ -904,9 +917,12 @@ class EnVariationalDiffusion(torch.nn.Module):
         """
         Draw samples from the generative model, keep the intermediate states for visualization purposes.
         """
-        z = self.sample_combined_position_feature_noise(n_samples, n_nodes, node_mask)
+        z = self.sample_combined_position_feature_noise(n_samples, n_nodes, node_mask, com_free=self.com_free)
 
-        diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
+        if self.com_free:
+            diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
+        else:
+            z = self.sigma_max * z
 
         if keep_frames is None:
             keep_frames = self.T
@@ -924,14 +940,15 @@ class EnVariationalDiffusion(torch.nn.Module):
             z = self.sample_p_zs_given_zt(
                 s_array, t_array, z, node_mask, edge_mask, context)
 
-            diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
+            if self.com_free:
+                diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
 
             # Write to chain tensor.
             write_index = (s * keep_frames) // self.T
             chain[write_index] = self.unnormalize_z(z, node_mask)
 
         # Finally sample p(x, h | z_0).
-        x, h = self.sample_p_xh_given_z0(z, node_mask, edge_mask, context)
+        x, h = self.sample_p_xh_given_z0(z, node_mask, edge_mask, context)  # we remove the mean even for com_free=False
 
         diffusion_utils.assert_mean_zero_with_mask(x[:, :, :self.n_dims], node_mask)
 
@@ -946,15 +963,18 @@ class EnVariationalDiffusion(torch.nn.Module):
         """
         Some info logging of the model.
         """
-        gamma_0 = self.gamma(torch.zeros(1, device=self.buffer.device))
-        gamma_1 = self.gamma(torch.ones(1, device=self.buffer.device))
+        if self.com_free:
+            gamma_0 = self.gamma(torch.zeros(1, device=self.buffer.device))
+            gamma_1 = self.gamma(torch.ones(1, device=self.buffer.device))
 
-        log_SNR_max = -gamma_0
-        log_SNR_min = -gamma_1
+            log_SNR_max = -gamma_0
+            log_SNR_min = -gamma_1
 
-        info = {
-            'log_SNR_max': log_SNR_max.item(),
-            'log_SNR_min': log_SNR_min.item()}
-        print(info)
+            info = {
+                'log_SNR_max': log_SNR_max.item(),
+                'log_SNR_min': log_SNR_min.item()}
+        else:
+            info = "Not using CoM-free systems!"
 
+        print(info)    
         return info
