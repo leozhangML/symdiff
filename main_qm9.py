@@ -1,8 +1,9 @@
 # Rdkit import should be first, do not move it
 try:
     from rdkit import Chem
+    print("RDKit found and imported")
 except ModuleNotFoundError:
-    pass
+    print("RDKit not found, please install it")
 import copy
 import utils
 import argparse
