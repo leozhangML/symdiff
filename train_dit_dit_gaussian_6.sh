@@ -48,7 +48,7 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_SwiGLU_test --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name DiT_DiTGaussian_test --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
