@@ -87,7 +87,6 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     print("Max size of molecule", max(sizes))
     print("Smallest size of molecule", min(sizes))
 
-
     # Filter based on molecule size.
     if filter_size is not None:
         # Keep only molecules <= filter_size
