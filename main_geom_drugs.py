@@ -38,7 +38,7 @@ parser.add_argument('--probabilistic_model', type=str, default='diffusion',
 
 
 ################## Data arguments ##################
-parser.add_argument('--data_file_dir', type=str, default=None,
+parser.add_argument('--datadir', type=str, default=None,
                     help='Give the path to the directory containing the data')
 
 
@@ -196,7 +196,7 @@ device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 
 # Getting the dataset
-data_file = args.data_file_dir   #'./data/geom/geom_drugs_30.npy'                         
+data_file = args.datadir   #'./data/geom/geom_drugs_30.npy'                         
 if args.remove_h:
     raise NotImplementedError('Remove H not implemented.')
 else:
