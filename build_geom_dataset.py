@@ -83,6 +83,12 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     split_indices = np.nonzero(mol_id[:-1] - mol_id[1:])[0] + 1
     data_list = np.split(conformers, split_indices)
 
+    ######
+    first_dims = []
+    for i in range(len(data_list)):
+        first_dims.append(data_list[i].shape[0])
+    ######
+
     # Filter based on molecule size.
     if filter_size is not None:
         # Keep only molecules <= filter_size
@@ -102,21 +108,10 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
 
     perm = np.load(os.path.join(base_path, 'geom_permutation.npy'))
     data_list = ([data_list[i] for i in perm])
-    print("DATA_LIST INFORMATION")
-    print(type(data_list), len(data_list), data_list[0].shape, type(data_list[0]))
-    print(data_list[0].shape, type(data_list[0]))
-    print(data_list[1].shape, type(data_list[1]))
-    print(data_list[2].shape, type(data_list[2]))
 
     num_mol = len(data_list)
     val_index = int(num_mol * val_proportion)
     test_index = val_index + int(num_mol * test_proportion)
-    print("INFORMATION ABOUT SPLITTING, VAL, TEST")
-    print(val_index, test_index)
-    asdsa
-
-
-
     val_data, test_data, train_data = np.split(data_list, [val_index, test_index])
     return train_data, val_data, test_data
 
