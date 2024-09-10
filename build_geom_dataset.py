@@ -87,6 +87,15 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     first_dims = []
     for i in range(len(data_list)):
         first_dims.append(data_list[i].shape[0])
+
+    # print th3 max
+    print("Max size of molecule", max(first_dims))
+    # Print second larges
+    first_dims.remove(max(first_dims))
+    print("Second largest size of molecule", max(first_dims))
+    # Print smallest
+    print("Smallest size of molecule", min(first_dims))
+
     ######
 
     # Filter based on molecule size.
