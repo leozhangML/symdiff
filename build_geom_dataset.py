@@ -76,6 +76,7 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
 
     mol_id = all_data[:, 0].astype(int)
     conformers = all_data[:, 1:]
+
     # Get ids corresponding to new molecules
     split_indices = np.nonzero(mol_id[:-1] - mol_id[1:])[0] + 1
     data_list = np.split(conformers, split_indices)
@@ -99,6 +100,9 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
 
     perm = np.load(os.path.join(base_path, 'geom_permutation.npy'))
     data_list = [data_list[i] for i in perm]
+    print("DATA_LIST INFORMATION")
+    print(type(data_list), len(data_list), data_list[0].shape)
+    ads
 
     num_mol = len(data_list)
     val_index = int(num_mol * val_proportion)
