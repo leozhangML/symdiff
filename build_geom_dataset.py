@@ -102,6 +102,9 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     data_list = ([data_list[i] for i in perm])
     print("DATA_LIST INFORMATION")
     print(type(data_list), len(data_list), data_list[0].shape, type(data_list[0]))
+    print(data_list[0].shape, type(data_list[0]))
+    print(data_list[1].shape, type(data_list[1]))
+    print(data_list[2].shape, type(data_list[2]))
 
     num_mol = len(data_list)
     val_index = int(num_mol * val_proportion)
