@@ -14,10 +14,13 @@ from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
+
+    # Get the distribution over nodes for sampling
     histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366 etc.
     in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
     nodes_dist = DistributionNodes(histogram)  # will sample over all nodes
 
+    # Arguments for conditioning
     prop_dist = None
     if len(args.conditioning) > 0:
         prop_dist = DistributionProperty(dataloader_train, args.conditioning)

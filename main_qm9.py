@@ -274,18 +274,19 @@ parser.add_argument("--concat_t", action="store_true", help="fourier time embedd
 parser.add_argument("--t_fourier", action="store_true", help="time config for transformer")
 
 
+# Getting the dataset
 args = parser.parse_args()
-
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
-
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-#args.cuda = False
+# args.cuda = False
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 
+
+# If resuming, load the previous args and model
 if args.resume is not None:
     exp_name = args.exp_name + '_resume'
     start_epoch = args.start_epoch
@@ -320,12 +321,13 @@ utils.create_folders(args)
 # print(args)
 
 
+# TODO: COME BACK TO
 # Wandb config
 if args.no_wandb:
     mode = 'disabled'
 else:
     mode = 'online' if args.online else 'offline'
-#kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
+# kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
 #          'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
 kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
           'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
@@ -334,7 +336,6 @@ wandb.save('*.txt')
 
 # Retrieve QM9 dataloaders
 dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
-
 data_dummy = next(iter(dataloaders['train']))
 
 
@@ -413,7 +414,6 @@ def main():
 
     best_nll_val = 1e8
     best_nll_test = 1e8
-
     best_mol_stable = 0
 
     for epoch in range(args.start_epoch, args.n_epochs):
