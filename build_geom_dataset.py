@@ -73,9 +73,6 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
 
     # base_path = os.path.dirname(conformation_file)
     all_data = np.load(conformation_file)  # 2d array: num_atoms x 5
-    print("Shape of all data")
-    print(all_data.shape)
-
     mol_id = all_data[:, 0].astype(int)
     conformers = all_data[:, 1:]
 
@@ -83,20 +80,13 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     split_indices = np.nonzero(mol_id[:-1] - mol_id[1:])[0] + 1
     data_list = np.split(conformers, split_indices)
 
-    ######
-    first_dims = []
+    # Show the size of the largest and smallest molecules
+    sizes = []
     for i in range(len(data_list)):
-        first_dims.append(data_list[i].shape[0])
+        sizes.append(data_list[i].shape[0])
+    print("Max size of molecule", max(sizes))
+    print("Smallest size of molecule", min(sizes))
 
-    # print th3 max
-    print("Max size of molecule", max(first_dims))
-    # Print second larges
-    first_dims.remove(max(first_dims))
-    print("Second largest size of molecule", max(first_dims))
-    # Print smallest
-    print("Smallest size of molecule", min(first_dims))
-
-    ######
 
     # Filter based on molecule size.
     if filter_size is not None:
@@ -115,13 +105,19 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     # np.save(os.path.join(base_path, 'geom_permutation.npy'), perm)
     # del perm
 
+    # Get the permutations
     perm = np.load(os.path.join(base_path, 'geom_permutation.npy'))
     data_list = ([data_list[i] for i in perm])
 
     num_mol = len(data_list)
     val_index = int(num_mol * val_proportion)
     test_index = val_index + int(num_mol * test_proportion)
-    val_data, test_data, train_data = np.split(data_list, [val_index, test_index])
+    
+    # Create the splits properly, old code was wrong: np.split(data_list, [val_index, test_index])
+    val_data = data_list[:val_index]
+    test_data = data_list[val_index:test_index]
+    train_data = data_list[test_index:]
+    
     return train_data, val_data, test_data
 
 
