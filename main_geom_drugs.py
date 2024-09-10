@@ -35,7 +35,8 @@ parser.add_argument('--model', type=str, default='egnn_dynamics',
                          'kernel_dynamics | egnn_dynamics |gnn_dynamics')
 parser.add_argument('--probabilistic_model', type=str, default='diffusion',
                     help='diffusion')
-
+parser.add_argument('--break_train_epoch', type=eval, default=False,
+                    help='True | False')
 
 ################## Data arguments ##################
 parser.add_argument('--datadir', type=str, default=None,

@@ -131,8 +131,9 @@ class GeomDrugsDataset(Dataset):
 
         # Sort the data list by size
         lengths = [s.shape[0] for s in data_list]
-        argsort = np.argsort(lengths)               # Sort by decreasing size
+        argsort = np.argsort(lengths)               # sort by decreasing size
         self.data_list = [data_list[i] for i in argsort]
+
         # Store indices where the size changes
         self.split_indices = np.unique(np.sort(lengths), return_index=True)[1][1:]
 
