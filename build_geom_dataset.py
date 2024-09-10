@@ -101,7 +101,7 @@ def load_split_data(conformation_file, val_proportion=0.1, test_proportion=0.1,
     perm = np.load(os.path.join(base_path, 'geom_permutation.npy'))
     data_list = np.array([data_list[i] for i in perm])
     print("DATA_LIST INFORMATION")
-    print(data_list.shape)
+    print(type(data_list), len(data_list), data_list[0].shape, type(data_list[0]))
     ads
 
     num_mol = len(data_list)
