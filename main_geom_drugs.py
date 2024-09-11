@@ -383,7 +383,7 @@ def main():
                 mol_stable = validity_dict["mol_stable"]                                                
 
             # Test for NLL
-            nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
+            nll_val = test(args=args, loader=dataloaders['val'], epoch=epoch, eval_model=model_ema_dp,
                            partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
                            property_norms=property_norms)
             nll_test = test(args=args, loader=dataloaders['test'], epoch=epoch, eval_model=model_ema_dp,
