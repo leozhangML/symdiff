@@ -45,6 +45,18 @@ parser.add_argument('--diffusion_loss_type', type=str, default='l2',
 
 # -------- optimiser args -------- #
 
+parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma")
+
+# Args for the optimiser for K
+parser.add_argument('--lr_K', type=float, default=2e-4)
+parser.add_argument('--use_amsgrad_K', action="store_true")  # default from EDM
+parser.add_argument('--weight_decay_K', type=float, default=1e-12)  # default from EDM
+
+# Args for the optimiser for gamma
+parser.add_argument('--lr_gamma', type=float, default=2e-4)
+parser.add_argument('--use_amsgrad_gamma', action="store_true")  # default from EDM
+parser.add_argument('--weight_decay_gamma', type=float, default=1e-12)  # default from EDM
+
 parser.add_argument('--n_epochs', type=int, default=200)
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--lr', type=float, default=2e-4)
@@ -357,8 +369,17 @@ model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders
 if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
-optim = get_optim(args, model)
-scheduler = get_scheduler(args, optim)
+
+# Get optimiser or optimisers
+if args.use_separate_optimisers:
+    optim_K, optim_gamma = get_optim(args, model)
+    optim = None
+else:
+    optim = get_optim(args, model)
+    optim_K, optim_gamma = None, None
+
+if not args.use_separate_optimisers:
+    scheduler = get_scheduler(args, optim)
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 if args.print_parameter_count:
     model.dynamics.print_parameter_count()
@@ -377,10 +398,20 @@ def main():
     if args.resume is not None:
         #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
         flow_state_dict = torch.load(join('outputs', args.resume, 'generative_model.npy'))  # for vdm
-        optim_state_dict = torch.load(join('outputs', args.resume, 'optim.npy'))
-        model.load_state_dict(flow_state_dict)
-        optim.load_state_dict(optim_state_dict)
-        if args.scheduler is not None:
+
+        if not args.use_separate_optimisers:
+            optim_state_dict = torch.load(join('outputs', args.resume, 'optim.npy'))
+            model.load_state_dict(flow_state_dict)
+            optim.load_state_dict(optim_state_dict)
+        else:
+            optim_K_state_dict = torch.load(join('outputs', args.resume, 'optim_K.npy'))
+            optim_gamma_state_dict = torch.load(join('outputs', args.resume, 'optim_gamma.npy'))
+            model.load_state_dict(flow_state_dict)
+            optim_K.load_state_dict(optim_K_state_dict)
+            optim_gamma.load_state_dict(optim_gamma_state_dict)
+
+
+        if args.scheduler is not None and not args.use_separate_optimisers:
             scheduler_state_dict = torch.load(join('outputs', args.resume, 'scheduler.npy'))
             scheduler.load_state_dict(scheduler_state_dict)
 
@@ -429,7 +460,8 @@ def main():
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
                     nodes_dist=nodes_dist, dataset_info=dataset_info,
-                    gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
+                    gradnorm_queue=gradnorm_queue, optim=optim, optim_gamma=optim_gamma, optim_K=optim_K,
+                    scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
         #if epoch % args.test_epochs == 0 and epoch != 0:  # NOTE: LEO
@@ -456,7 +488,14 @@ def main():
                 best_nll_test = nll_test
                 if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
                     args.current_epoch = epoch + 1
-                    utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
+
+                    # Save optimisers
+                    if not args.use_separate_optimisers:
+                        utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
+                    else:
+                        utils.save_model(optim_K, 'outputs/%s/optim_K.npy' % args.exp_name)
+                        utils.save_model(optim_gamma, 'outputs/%s/optim_gamma.npy' % args.exp_name)
+
                     utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
@@ -468,8 +507,14 @@ def main():
             # NOTE: added to save best model on mol stable
             if mol_stable > best_mol_stable:
                 if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
-                    utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
+
+                    if not args.use_separate_optimisers:
+                        utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
+                    else:
+                        utils.save_model(optim_K, 'outputs/%s/optim_K_ms.npy' % args.exp_name)
+                        utils.save_model(optim_gamma, 'outputs/%s/optim_gamma_ms.npy' % args.exp_name)                                                                                
                     utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
+
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
                     if args.ema_decay > 0:
@@ -477,16 +522,6 @@ def main():
                     with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
-                # ???
-                """
-                if args.save_model:
-                    utils.save_model(optim, 'outputs/%s/optim_%d.npy' % (args.exp_name, epoch))
-                    utils.save_model(model, 'outputs/%s/generative_model_%d.npy' % (args.exp_name, epoch))
-                    if args.ema_decay > 0:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_%d.npy' % (args.exp_name, epoch))
-                    with open('outputs/%s/args_%d.pickle' % (args.exp_name, epoch), 'wb') as f:
-                        pickle.dump(args, f)
-                """
             print('Val loss: %.4f \t Test loss:  %.4f' % (nll_val, nll_test))
             print('Best val loss: %.4f \t Best test loss:  %.4f' % (best_nll_val, best_nll_test))
             wandb.log({"Val loss ": nll_val}, commit=True)

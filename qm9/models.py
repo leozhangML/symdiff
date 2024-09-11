@@ -593,12 +593,27 @@ def get_model(args, device, dataset_info, dataloader_train):
 
 
 def get_optim(args, generative_model):
-    optim = torch.optim.AdamW(
-        generative_model.parameters(),
-        lr=args.lr, amsgrad=args.use_amsgrad,
-        weight_decay=args.weight_decay)
+    if not args.use_separate_optimisers:
+        optim = torch.optim.AdamW(
+            generative_model.parameters(),
+            lr=args.lr, amsgrad=args.use_amsgrad,
+            weight_decay=args.weight_decay)
 
-    return optim
+        return optim
+
+    else:
+        optim_K = torch.optim.AdamW(
+            generative_model.dynamics.parameters(),
+            lr=args.lr_K, amsgrad=args.use_amsgrad_K,
+            weight_decay=args.weight_decay_K)
+
+        optim_gamma = torch.optim.AdamW(
+            generative_model.gamma.parameters(),
+            lr=args.lr_gamma, amsgrad=args.use_amsgrad_gamma,
+            weight_decay=args.weight_decay_gamma)
+
+        return optim_K, optim_gamma            
+
 
 
 def get_scheduler(args, optim):

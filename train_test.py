@@ -14,8 +14,8 @@ import torch
 from tqdm import tqdm
 
 
-def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim, scheduler,
-                nodes_dist, gradnorm_queue, dataset_info, prop_dist):
+def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim, 
+                scheduler, nodes_dist, gradnorm_queue, dataset_info, prop_dist, optim_gamma=None, optim_K=None)
     model_dp.train()
     model.train()
     nll_epoch = []
@@ -49,7 +49,12 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         else:
             context = None
 
-        optim.zero_grad()
+        # Either use one optimiser for both the gamma and k, or two separate ones
+        if optim is not None:
+            optim.zero_grad()
+        else:
+            optim_gamma.zero_grad()
+            optim_K.zero_grad()
 
         # transform batch through flow
         nll, reg_term, mean_abs_z = losses.compute_loss_and_nll(args, model_dp, nodes_dist,
@@ -63,7 +68,14 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         else:
             grad_norm = 0.
 
-        optim.step()
+        # Step optimizer
+        if optim is not None:
+            optim.step()
+        else:
+            optim_gamma.step()
+            optim_K.step()
+
+        # Note that scheduler is only supported for when we are only using one optimiser
         if scheduler is not None:
             wandb.log({"lr": optim.param_groups[0]["lr"]}, commit=True)
             scheduler.step()
