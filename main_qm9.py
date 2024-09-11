@@ -380,6 +380,8 @@ else:
 
 if not args.use_separate_optimisers:
     scheduler = get_scheduler(args, optim)
+else:
+    scheduler = None
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 if args.print_parameter_count:
     model.dynamics.print_parameter_count()
