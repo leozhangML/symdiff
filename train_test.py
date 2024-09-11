@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 
 def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim, 
-                scheduler, nodes_dist, gradnorm_queue, dataset_info, prop_dist, optim_gamma=None, optim_K=None)
+                scheduler, nodes_dist, gradnorm_queue, dataset_info, prop_dist, optim_gamma=None, optim_K=None):
     model_dp.train()
     model.train()
     nll_epoch = []
