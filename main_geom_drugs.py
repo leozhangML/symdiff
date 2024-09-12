@@ -249,8 +249,8 @@ if args.resume is not None:
     mlp_type = args.mlp_type  # MLP type
 
     # Load the arguments from the previous run
-    with open(join(args.resume, 'args.pickle'), 'rb') as f:
-        args = pickle.load(f)
+    # with open(join(args.resume, 'args.pickle'), 'rb') as f:
+    #     args = pickle.load(f)
 
     # Update the arguments
     args.resume = resume
