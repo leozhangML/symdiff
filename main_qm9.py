@@ -57,6 +57,7 @@ parser.add_argument('--lr_gamma', type=float, default=2e-4)
 parser.add_argument('--use_amsgrad_gamma', action="store_true")  # default from EDM
 parser.add_argument('--weight_decay_gamma', type=float, default=1e-12)  # default from EDM
 
+# Other args
 parser.add_argument('--n_epochs', type=int, default=200)
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--lr', type=float, default=2e-4)
@@ -272,6 +273,10 @@ parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for D
 
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
 parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
+
+# Positional embeddings
+parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+
 
 # -------- sym_diff time args -------- #
 

@@ -430,7 +430,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             mlp_type=args.mlp_type,
 
             n_dims=3,
-            device=device
+            device=device,
+            use_separate_gauss_embs = args.use_separate_gauss_embs
         )
     
     elif args.model == "perceiver_gaussian_dynamics":

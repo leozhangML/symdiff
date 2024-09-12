@@ -1960,14 +1960,20 @@ class DiT_DitGaussian_dynamics(nn.Module):
         mlp_type: str = "mlp",
 
         n_dims: int = 3,
-        device: str = "cpu"
+        device: str = "cpu",
+        use_separate_gauss_embs = False,
     ) -> None:
         super().__init__()
 
         self.args = args
         self.n_dims = n_dims
+        self.use_separate_gauss_embs = use_separate_gauss_embs
 
-        self.gaussian_embedder = GaussianLayer(K=K)
+        if not use_separate_gauss_embs:
+            self.gaussian_embedder = GaussianLayer(K=K)
+        else:
+            self.gaussian_embedder_gamma = GaussianLayer(K=K)
+            self.gaussian_embedder_k = GaussianLayer(K=K)
 
         self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
         self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
@@ -2048,8 +2054,15 @@ class DiT_DitGaussian_dynamics(nn.Module):
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
-        pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
-        pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+        if not self.use_separate_gauss_embs:
+            pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+            pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+        else:
+            pos_emb_gamma = self.gaussian_embedder_gamma(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+            pos_emb_gamma = torch.sum(self.pos_embedder_gamma(pos_emb_gamma), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
+            pos_emb_k = self.gaussian_embedder_k(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+            pos_emb_k = torch.sum(self.pos_embedder(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
 
         g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
@@ -2063,7 +2076,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
                     )
                 ], dim=-1)
 
-        g_inv_x = torch.cat([g_inv_x, pos_emb.clone()], dim=-1)
+        if not self.use_separate_gauss_embs:
+            g_inv_x = torch.cat([g_inv_x, pos_emb.clone()], dim=-1)
+        else:
+            g_inv_x = torch.cat([g_inv_x, pos_emb_gamma.clone()], dim=-1)
 
         # [bs, n_nodes, hidden_size]
         gamma = node_mask * self.gamma_enc(
@@ -2081,9 +2097,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         gamma_inv_x = torch.bmm(x, gamma.clone())
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
-        xh = torch.cat([xh, pos_emb], dim=-1) * node_mask
-        xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
 
+        if not self.use_separate_gauss_embs:
+            xh = torch.cat([xh, pos_emb], dim=-1) * node_mask
+        else:
+            xh = torch.cat([xh, pos_emb_k], dim=-1) * node_mask
+
+        xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
         x = xh[:, :, :self.n_dims] 
         h = xh[:, :, self.n_dims:]
 
