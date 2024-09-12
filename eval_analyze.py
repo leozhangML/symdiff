@@ -144,6 +144,15 @@ def main():
     if not hasattr(args, 'mlp_type'):  # LEO
         print("mlp_type not found!")
         args.mlp_type = 'mlp'
+    if not hasattr(args, 'rho'):  # LEO
+        print("rho not found!")
+        args.rho = None
+    if not hasattr(args, 'sigma_min'):  # LEO
+        print("sigma_min not found!")
+        args.sigma_min = None
+    if not hasattr(args, 'sigma_max'):  # LEO
+        print("sigma_max not found!")
+        args.sigma_max = None
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")

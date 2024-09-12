@@ -1,8 +1,3 @@
-# Rdkit import should be first, do not move it
-try:
-    from rdkit import Chem
-except ModuleNotFoundError:
-    pass
 import copy
 import utils
 import argparse
@@ -287,11 +282,7 @@ args = parser.parse_args()
 
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 
-atom_encoder = dataset_info['atom_encoder']
-atom_decoder = dataset_info['atom_decoder']
-
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-#args.cuda = False
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 
@@ -326,7 +317,6 @@ if args.resume is not None:
     print(args)
 
 utils.create_folders(args)
-# print(args)
 
 
 # Wandb config
@@ -341,29 +331,13 @@ kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
 wandb.init(**kwargs)
 wandb.save('*.txt')
 
-# Retrieve QM9 dataloaders
+# Retrieve toy dataset
 dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
-
-data_dummy = next(iter(dataloaders['train']))
-
-
-if len(args.conditioning) > 0:
-    print(f'Conditioning on {args.conditioning}')
-    property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)  # compute mean, mad of each prop
-    context_dummy = prepare_context(args.conditioning, data_dummy, property_norms)  # combines conditioning info into tensor
-    context_node_nf = context_dummy.size(2)  # this is combined dim of all conditioning props
-else:
-    context_node_nf = 0
-    property_norms = None
-
-args.context_node_nf = context_node_nf
 
 # Create EGNN flow
 # vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
 # note that nodes_dist.sample is not filtered
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
-if prop_dist is not None:  # when conditioning
-    prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 optim = get_optim(args, model)
 scheduler = get_scheduler(args, optim)
@@ -371,19 +345,12 @@ print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.re
 if args.print_parameter_count:
     model.dynamics.print_parameter_count()
 
-gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
+gradnorm_queue = utils.Queue()
 gradnorm_queue.add(3000)  # Add large value that will be flushed.
-
-
-def check_mask_correct(variables, node_mask):
-    for variable in variables:
-        if len(variable) > 0:
-            assert_correctly_masked(variable, node_mask)
 
 
 def main():
     if args.resume is not None:
-        #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
         flow_state_dict = torch.load(join('outputs', args.resume, 'generative_model.npy'))  # for vdm
         optim_state_dict = torch.load(join('outputs', args.resume, 'optim.npy'))
         model.load_state_dict(flow_state_dict)
@@ -414,7 +381,7 @@ def main():
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
             model_ema_dp = model_ema
-        
+
     else:
         ema = None
         model_ema = model
@@ -423,20 +390,13 @@ def main():
     best_nll_val = 1e8
     best_nll_test = 1e8
 
-    best_mol_stable = 0
-
     for epoch in range(args.start_epoch, args.n_epochs):
         wandb.log({"Epoch": epoch}, commit=True)
         print(f"--- Epoch {epoch} ---")
 
-        #print("TEST WITH VAL FIRST")
-        #nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model,
-        #           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
-        #           property_norms=property_norms)
-
         start_epoch = time.time()
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
-                    model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
+                    model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=None,
                     nodes_dist=nodes_dist, dataset_info=dataset_info,
                     gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")

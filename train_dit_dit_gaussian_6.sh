@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiTGaussian_SwiGLU_test
+#SBATCH --job-name=DiT_DiTGaussian_test_noise_0
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -48,17 +48,16 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_SwiGLU_test --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name DiT_DiTGaussian_test_noise_0 --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
                    --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
                    --xh_hidden_size 184 --K 184 \
                    --mlp_type swiglu \
-                   --enc_hidden_size 128 --enc_depth 8 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 \
-                   --hidden_size 384 --depth 12 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
-                   --noise_dims 3 --noise_std 1.0 \
-                   --print_parameter_count 
+                   --enc_hidden_size 128 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 \
+                   --hidden_size 384 --depth 9 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
+                   --noise_dims 3 --noise_std 0.3 \
 
 date -u
 
