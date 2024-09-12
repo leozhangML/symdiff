@@ -330,7 +330,7 @@ def check_mask_correct(variables, node_mask):
 def main():
     # If resuming, load the model and optimizer state dicts.
     if args.resume is not None:
-        # flow_state_dict = torch.load(join(args.resume, 'flow.npy'))
+        flow_state_dict = torch.load(join(args.resume, 'generative_model.npy'))
         # dequantizer_state_dict = torch.load(join(args.resume, 'dequantizer.npy'))
         optim_state_dict = torch.load(join(args.resume, 'optim.npy'))
         model.load_state_dict(flow_state_dict)
