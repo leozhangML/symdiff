@@ -109,6 +109,10 @@ parser.add_argument("--use_separate_optimisers", action="store_true", help="Whet
 parser.add_argument('--use_separate_ema', action="store_true", help='Use separate ema for the gamma and k', default=False)
 parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k", default=False)
 
+# Seprate arguments for dropout        
+parser.add_argument("--dropout_gamma_enc", type=float, default=0.0, help="Dropout for gamma encoder")
+parser.add_argument("--dropout_gamma_dec", type=float, default=0.0, help="Dropout for gamma decoder")
+parser.add_argument("--dropout_k", type=float, default=0.0, help="Dropout for k")
 
 ################## Optimization arguments ##################
 parser.add_argument('--n_epochs', type=int, default=200)
