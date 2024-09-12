@@ -322,7 +322,7 @@ def main():
         optim.load_state_dict(optim_state_dict)
 
         if args.scheduler is not None:
-            scheduler_state_dict = torch.load(join('outputs', args.resume, 'scheduler.npy'))
+            scheduler_state_dict = torch.load(join(args.resume, 'scheduler.npy'))
             scheduler.load_state_dict(scheduler_state_dict)        
 
     # Initialize dataparallel if enabled and possible.
@@ -339,7 +339,7 @@ def main():
         ema = diffusion_utils.EMA(args.ema_decay)
 
         if args.resume is not None:
-            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
+            ema_state_dict = torch.load(join(args.resume, 'generative_model_ema.npy'))
             model_ema.load_state_dict(ema_state_dict)        
 
         if args.dp and torch.cuda.device_count() > 1:
