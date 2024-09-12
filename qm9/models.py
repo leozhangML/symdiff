@@ -603,12 +603,12 @@ def get_optim(args, generative_model):
 
     else:
         optim_K = torch.optim.AdamW(
-            generative_model.dynamics.parameters(),
+            generative_model.dynamics.k.parameters(),
             lr=args.lr_K, amsgrad=args.use_amsgrad_K,
             weight_decay=args.weight_decay_K)
 
         optim_gamma = torch.optim.AdamW(
-            generative_model.gamma.parameters(),
+            list(generative_model.dynamics.gamma_enc.parameters()) + list(generative_model.dynamics.gamma_dec.parameters()),
             lr=args.lr_gamma, amsgrad=args.use_amsgrad_gamma,
             weight_decay=args.weight_decay_gamma)
 
