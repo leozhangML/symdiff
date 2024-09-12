@@ -99,6 +99,17 @@ parser.add_argument('--diffusion_loss_type', type=str, default='l2',
 parser.add_argument('--diffusion_noise_precision', type=float, default=1e-5)
 
 
+# Positional embeddings
+parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+
+# Use separate optimizers for K and Gamma
+parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma")
+
+# Use separate ema
+parser.add_argument('--use_separate_ema', type=eval, default=False, help='Use separate ema for the gamma and k')    
+parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
+
+
 ################## Optimization arguments ##################
 parser.add_argument('--n_epochs', type=int, default=200)
 parser.add_argument('--batch_size', type=int, default=128)
