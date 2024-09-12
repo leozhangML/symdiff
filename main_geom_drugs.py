@@ -100,14 +100,14 @@ parser.add_argument('--diffusion_noise_precision', type=float, default=1e-5)
 
 
 # Positional embeddings
-parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma", default=False)
 
 # Use separate optimizers for K and Gamma
-parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma")
+parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma", default=False)
 
 # Use separate ema
-parser.add_argument('--use_separate_ema', type=eval, default=False, help='Use separate ema for the gamma and k')    
-parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
+parser.add_argument('--use_separate_ema', action="store_true", help='Use separate ema for the gamma and k', default=False)
+parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k", default=False)
 
 
 ################## Optimization arguments ##################
