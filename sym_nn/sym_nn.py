@@ -1976,7 +1976,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
             self.gaussian_embedder_k = GaussianLayer(K=K)
 
         self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
-        self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
+
+        if not self.use_separate_gauss_embs:
+            self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
+        else:
+            self.pos_embedder_gamma = nn.Linear(K, hidden_size-xh_hidden_size)
+            self.pos_embedder_k = nn.Linear(K, hidden_size-xh_hidden_size)
+
 
         self.noise_dims = noise_dims
         self.noise_std = noise_std
@@ -2062,7 +2068,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
             pos_emb_gamma = torch.sum(self.pos_embedder_gamma(pos_emb_gamma), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
 
             pos_emb_k = self.gaussian_embedder_k(x, node_mask)  # [bs, n_nodes, n_nodes, K]
-            pos_emb_k = torch.sum(self.pos_embedder(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+            pos_emb_k = torch.sum(self.pos_embedder_k(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
 
         g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
@@ -2120,7 +2126,12 @@ class DiT_DitGaussian_dynamics(nn.Module):
     def print_parameter_count(self):
 
         xh_embedder_params = sum(p.numel() for p in self.xh_embedder.parameters() if p.requires_grad)
-        pos_embedder_params = sum(p.numel() for p in self.pos_embedder.parameters() if p.requires_grad)
+        if not self.use_separate_gauss_embs:            
+            pos_embedder_params = sum(p.numel() for p in self.pos_embedder.parameters() if p.requires_grad)
+        else:
+            pos_embedder_params = 0
+            pos_embedder_params += sum(p.numel() for p in self.pos_embedder_gamma.parameters() if p.requires_grad)
+            pos_embedder_params += sum(p.numel() for p in self.pos_embedder_k.parameters() if p.requires_grad)
         embedder_params = xh_embedder_params + pos_embedder_params
         gamma_enc_params = sum(p.numel() for p in self.gamma_enc.parameters() if p.requires_grad)
         gamma_dec_params = sum(p.numel() for p in self.gamma_dec.parameters() if p.requires_grad)
