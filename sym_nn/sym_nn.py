@@ -1962,6 +1962,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
         n_dims: int = 3,
         device: str = "cpu",
         use_separate_gauss_embs = False,
+        use_separate_dropout = False,
+        dropout_gamma_enc = 0,
+        dropout_gamma_dec = 0,
+        dropout_k = 0
     ) -> None:
         super().__init__()
 
@@ -1994,32 +1998,61 @@ class DiT_DitGaussian_dynamics(nn.Module):
         else:
             self.gamma_enc_input_dim = n_dims + hidden_size-xh_hidden_size + noise_dims
 
-        # enc_out_channels not used 
-        self.gamma_enc = DiT(
-            out_channels=0, x_scale=0.0, 
-            hidden_size=enc_hidden_size, depth=enc_depth, 
-            num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
-            use_fused_attn=True, x_emb="linear", 
-            input_dim=self.gamma_enc_input_dim,
-            mlp_type=mlp_type
-        ).to(device)
+        # Using separate dropout for gamma, and K
+        if not use_separate_dropout:
+            # enc_out_channels not used 
+            self.gamma_enc = DiT(
+                out_channels=0, x_scale=0.0, 
+                hidden_size=enc_hidden_size, depth=enc_depth, 
+                num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+                use_fused_attn=True, x_emb="linear", 
+                input_dim=self.gamma_enc_input_dim,
+                mlp_type=mlp_type
+            ).to(device)
 
-        # add t emb here
-        self.gamma_dec = Mlp(
-            in_features=enc_hidden_size, hidden_features=dec_hidden_features,
-            out_features=n_dims**2
-        ).to(device)
+            # add t emb here
+            self.gamma_dec = Mlp(
+                in_features=enc_hidden_size, hidden_features=dec_hidden_features,
+                out_features=n_dims**2
+            ).to(device)
 
-        self.k = DiT(
-            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
-            hidden_size=hidden_size, depth=depth, 
-            num_heads=num_heads, mlp_ratio=mlp_ratio,
-            mlp_dropout=mlp_dropout, 
-            use_fused_attn=True, x_emb="identity",
-            mlp_type=mlp_type
-            )
+            self.k = DiT(
+                out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
+                hidden_size=hidden_size, depth=depth, 
+                num_heads=num_heads, mlp_ratio=mlp_ratio,
+                mlp_dropout=mlp_dropout, 
+                use_fused_attn=True, x_emb="identity",
+                mlp_type=mlp_type
+                )
+
+        else:
+            # enc_out_channels not used 
+            self.gamma_enc = DiT(
+                out_channels=0, x_scale=0.0, 
+                hidden_size=enc_hidden_size, depth=enc_depth, 
+                num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+                use_fused_attn=True, x_emb="linear", 
+                input_dim=self.gamma_enc_input_dim,
+                mlp_type=mlp_type, mlp_dropout=dropout_gamma_enc
+            ).to(device)
+
+            # add t emb here
+            self.gamma_dec = Mlp(
+                in_features=enc_hidden_size, hidden_features=dec_hidden_features,
+                out_features=n_dims**2, drop=dropout_gamma_dec
+            ).to(device)
+
+            self.k = DiT(
+                out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
+                hidden_size=hidden_size, depth=depth, 
+                num_heads=num_heads, mlp_ratio=mlp_ratio,
+                mlp_dropout=dropout_k,
+                use_fused_attn=True, x_emb="identity",
+                mlp_type=mlp_type
+                )            
 
         self.device = device
+
 
         def _basic_init(module):
             if isinstance(module, nn.Linear):

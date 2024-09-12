@@ -431,8 +431,11 @@ def get_model(args, device, dataset_info, dataloader_train):
 
             n_dims=3,
             device=device,
-            use_separate_gauss_embs = args.use_separate_gauss_embs
-        )
+            use_separate_gauss_embs = args.use_separate_gauss_embs,
+            use_separate_dropout = args.use_separate_dropout,
+            dropout_gamma_enc = args.dropout_gamma_enc,
+            dropout_gamma_dec = args.dropout_gamma_dec,
+            dropout_k = args.dropout_k)
     
     elif args.model == "perceiver_gaussian_dynamics":
 

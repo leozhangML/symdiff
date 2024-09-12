@@ -269,6 +269,14 @@ parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="confi
 parser.add_argument("--xh_hidden_size", type=int, default=128, help="config for DiTEmb")
 parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for DiTEmb")
 
+
+# Seprate arguments for dropout        
+parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
+parser.add_argument("--dropout_gamma_enc", type=float, default=0.0, help="Dropout for gamma encoder")
+parser.add_argument("--dropout_gamma_dec", type=float, default=0.0, help="Dropout for gamma decoder")
+parser.add_argument("--dropout_k", type=float, default=0.0, help="Dropout for k")
+
+
 # -------- DiTGaussian args -------- #
 
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
