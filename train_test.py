@@ -34,11 +34,11 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
             eps = sample_center_gravity_zero_gaussian_with_mask(x.size(), x.device, node_mask)
             x = x + eps * args.augment_noise
 
-        x = remove_mean_with_mask(x, node_mask)  # applied twice?
+        x = remove_mean_with_mask(x, node_mask)
         if args.data_augmentation:
-            x = utils.random_rotation(x).detach()
+            x = utils.random_rotation(x).detach()  # works for n_dims=2
 
-        check_mask_correct([x, one_hot, charges], node_mask)
+        check_mask_correct([x, one_hot, charges], node_mask) if args.molecule else None
         assert_mean_zero_with_mask(x, node_mask)
 
         h = {'categorical': one_hot, 'integer': charges}
@@ -88,7 +88,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
             # saves 5 sampled molecules and 1 sampled chain to outputs (if stable)
             # they use max_n_nodes (NOTE: no suitble for filtered atoms??)
             save_and_sample_chain(model_ema, args, device, dataset_info, prop_dist, epoch=epoch,
-                                  batch_id=str(i))
+                                    batch_id=str(i))
             sample_different_sizes_and_save(model_ema, nodes_dist, args, device, dataset_info,
                                             prop_dist, epoch=epoch)
             print(f'Sampling took {time.time() - start:.2f} seconds')
@@ -136,7 +136,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                 x = x + eps * args.augment_noise
 
             x = remove_mean_with_mask(x, node_mask)
-            check_mask_correct([x, one_hot, charges], node_mask)
+            check_mask_correct([x, one_hot, charges], node_mask) if args.molecule else None
             assert_mean_zero_with_mask(x, node_mask)
 
             h = {'categorical': one_hot, 'integer': charges}

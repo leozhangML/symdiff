@@ -12,6 +12,8 @@ import time
 import pickle
 from train_test import train_epoch, test, analyze_and_save
 
+from sym_nn.distributions import retrieve_dataloaders
+
 import os
 print(f"os.getcwd(): {os.getcwd()}")
 
@@ -126,6 +128,10 @@ parser.add_argument('--normalization_factor', type=float, default=1,
 parser.add_argument('--aggregation_method', type=str, default='sum',
                     help='"sum" or "mean"')
 
+# -------- distribution args -------- #
+
+
+
 # -------- sym_diff args -------- #
 
 parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
@@ -233,7 +239,7 @@ wandb.init(**kwargs)
 wandb.save('*.txt')
 
 # Retrieve toy dataset
-dataloaders, charge_scale = dataset.retrieve_dataloaders(args)  # NOTE
+dataloaders = retrieve_dataloaders(args)
 
 # Get model
 model, _, _ = get_model(args, device, None, None)
@@ -271,7 +277,6 @@ def main():
         model_ema = copy.deepcopy(model)
         ema = flow_utils.EMA(args.ema_decay)
 
-        # NOTE: LEO
         if args.resume is not None:
             ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
             model_ema.load_state_dict(ema_state_dict)
