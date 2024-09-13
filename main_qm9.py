@@ -296,6 +296,11 @@ parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTG
 
 # Positional embeddings
 parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+parser.add_argument("--gamma_K", type=float, default=0, help="K for gamma positional embeddings")
+parser.add_argument("--k_K", type=float, default=0, help="K for k positional embeddings")
+parser.add_argument("--pos_emb_gamma_projection_dim", type=float, default=0, help="Dimension of the projection for gamma positional embeddings")
+
+
 
 
 # -------- sym_diff time args -------- #
