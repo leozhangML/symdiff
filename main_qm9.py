@@ -311,6 +311,11 @@ parser.add_argument("--concat_t", action="store_true", help="fourier time embedd
 parser.add_argument("--t_fourier", action="store_true", help="time config for transformer")
 
 
+### Model parts to freeze for DIT DIT model  ####
+parser.add_argument("--freeze_model_parts", action="store_true", help="Whether to freeze the model parts")
+parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
+
+
 # Getting the dataset
 args = parser.parse_args()
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
@@ -318,7 +323,6 @@ atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-# args.cuda = False
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 
@@ -452,52 +456,24 @@ def main():
 
 
     # Create EMA either for both models or separate for gamma and K
-    if not args.use_separate_ema:
-        if args.ema_decay > 0:
-            model_ema = copy.deepcopy(model)
-            ema = flow_utils.EMA(args.ema_decay)
-
-            # NOTE: LEO
-            if args.resume is not None:
-                ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
-                model_ema.load_state_dict(ema_state_dict)
-
-            if args.dp and torch.cuda.device_count() > 1:
-                model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
-            else:
-                model_ema_dp = model_ema
-            
-        else:
-            ema = None
-            model_ema = model
-            model_ema_dp = model_dp  # how is this used?
-
-
-    else:
+    if args.ema_decay > 0 or args.use_separate_ema:
         model_ema = copy.deepcopy(model)
-        model_gamma_ema_enc = copy.deepcopy(model.gamma_enc)
-        model_gamma_ema_dec = copy.deepcopy(model.gamma_dec)
-        model_k_ema = copy.deepcopy(model.dynamics.k)
-
-        ema = flow_utils.EMA(args.ema_decay)
-        emma_gamma_enc = flow_utils.EMA(args.ema_decay_gamma)
-        emma_gamma_dec = flow_utils.EMA(args.ema_decay_gamma)
-        emma_k = flow_utils.EMA(args.ema_decay_K)
+        ema = flow_utils.EMA(beta=args.ema_decay, use_separate_emas=args.use_separate_ema, k_beta=args.ema_decay_K, gamma_beta=args.ema_decay_gamma)
 
         # NOTE: LEO
         if args.resume is not None:
-            gamma_enc_state_dict = torch.load(join('outputs', args.resume, 'gamma_enc_ema.npy'))
-            model_ema.gamma_enc.load_state_dict(gamma_enc_state_dict)
-            gamma_dec_state_dict = torch.load(join('outputs', args.resume, 'gamma_dec_ema.npy'))
-            model_ema.gamma_dec.load_state_dict(gamma_dec_state_dict)
-            k_state_dict = torch.load(join('outputs', args.resume, 'k_ema.npy'))
-            model_ema.dynamics.k.load_state_dict(k_state_dict)
+            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
+            model_ema.load_state_dict(ema_state_dict)
 
         if args.dp and torch.cuda.device_count() > 1:
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
-            model_ema_dp = model_ema                          
-
+            model_ema_dp = model_ema
+        
+    else:
+        ema = None
+        model_ema = model
+        model_ema_dp = model_dp  # how is this used?                
 
     best_nll_val = 1e8
     best_nll_test = 1e8
@@ -553,14 +529,8 @@ def main():
                         utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
 
                     # Check if we are doing separate EMA or not
-                    if not args.use_separate_ema:
-                        if args.ema_decay > 0:
-                            utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
-                    else:
-                        # Save gamma enc, gamma dec and k emas separately
-                        utils.save_model(model_ema.gamma_enc, 'outputs/%s/gamma_enc_ema.npy' % args.exp_name)
-                        utils.save_model(model_ema.gamma_dec, 'outputs/%s/gamma_dec_ema.npy' % args.exp_name)
-                        utils.save_model(model_ema.dynamics.k, 'outputs/%s/k_ema.npy' % args.exp_name)                        
+                    if args.ema_decay > 0 or args.use_separate_ema:
+                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)                       
 
                     # Save args
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
@@ -582,13 +552,8 @@ def main():
                         utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
 
                     if not args.use_separate_ema:
-                        if args.ema_decay > 0:  # EMA CODE
-                            utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
-                        else:
-                        # Save gamma enc, gamma dec and k emas separately
-                            utils.save_model(model_ema.gamma_enc, 'outputs/%s/gamma_enc_ema_ms.npy' % args.exp_name)
-                            utils.save_model(model_ema.gamma_dec, 'outputs/%s/gamma_dec_ema_ms.npy' % args.exp_name)
-                            utils.save_model(model_ema.dynamics.k, 'outputs/%s/k_ema_ms.npy' % args.exp_name)                            
+                    if args.ema_decay > 0 or args.use_separate_ema:
+                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
 
                     with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
