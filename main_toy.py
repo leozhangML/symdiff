@@ -2,25 +2,21 @@ import copy
 import utils
 import argparse
 import wandb
-from configs.datasets_config import get_dataset_info
 from os.path import join
 from qm9 import dataset
 from qm9.models import get_optim, get_scheduler, get_model
 from equivariant_diffusion import en_diffusion
-from equivariant_diffusion.utils import assert_correctly_masked
 from equivariant_diffusion import utils as flow_utils
 import torch
 import time
 import pickle
-from qm9.utils import prepare_context, compute_mean_mad
 from train_test import train_epoch, test, analyze_and_save
 
 import os
 print(f"os.getcwd(): {os.getcwd()}")
 
-#wandb.login(key="78d61cd721affd9ffa2f5e217ed6f49de71eb842")
 
-parser = argparse.ArgumentParser(description='E3Diffusion')
+parser = argparse.ArgumentParser(description='ToyExperiment')
 parser.add_argument('--exp_name', type=str, default='debug_10')
 parser.add_argument('--model', type=str, default='egnn_dynamics',
                     help='our_dynamics | schnet | simple_dynamics | '
@@ -141,87 +137,17 @@ parser.add_argument("--sigma_max", type=float, default=10, help="VE schedule")
 parser.add_argument("--print_grad_norms", action="store_true", help="whether to show the gamma and k grad norms")
 parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
-# -------- sym_diff perceiver args -------- #
-
-parser.add_argument("--context_hidden_size", type=int, default=512, help="preprocessor config for perceiver")
-
-parser.add_argument("--gamma_num_latents", type=int, default=64, help="gamma config for perceiver")
-parser.add_argument("--gamma_d_latents", type=int, default=128, help="gamma config for perceiver")
-parser.add_argument("--gamma_n_pad", type=int, default=61, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_blocks", type=int, default=1, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_self_attends_per_block", type=int, default=3, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_self_attention_heads", type=int, default=4, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_cross_attention_heads", type=int, default=4, help="gamma config for perceiver")
-parser.add_argument("--gamma_attention_probs_dropout_prob", type=float, default=0.1, help="gamma config for perceiver")
-parser.add_argument("--gamma_pos_num_channels", type=int, default=64, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_heads", type=int, default=4, help="gamma config for perceiver")
-
-parser.add_argument("--k_num_latents", type=int, default=128, help="k config for perceiver")
-parser.add_argument("--k_d_latents", type=int, default=256, help="k config for perceiver")
-parser.add_argument("--k_n_pad", type=int, default=55, help="k config for perceiver")
-parser.add_argument("--k_num_blocks", type=int, default=1, help="k config for perceiver")
-parser.add_argument("--k_num_self_attends_per_block", type=int, default=10, help="k config for perceiver")
-parser.add_argument("--k_num_self_attention_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_num_cross_attention_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_attention_probs_dropout_prob", type=float, default=0.1, help="k config for perceiver")
-parser.add_argument("--k_enc_mlp_factor", type=int, default=2, help="k config for perceiver")
-
-parser.add_argument("--k_pos_num_channels", type=int, default=64, help="k config for perceiver")
-parser.add_argument("--k_num_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_decoder_self_attention", action="store_true", help="k config for perceiver")
-parser.add_argument("--k_num_self_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_query_residual", action="store_true", help="k config for perceiver")
-
-parser.add_argument("--decoder_hidden_size", type=int, default=256, help="k config for perceiver")
-
-# -------- sym_diff transformer args -------- #
-
-parser.add_argument("--gamma_num_enc_layers", type=int, default=2, help="gamma config for transformer")
-parser.add_argument("--gamma_num_dec_layers", type=int, default=2, help="gamma config for transformer")
-parser.add_argument("--gamma_d_model", type=int, default=128, help="gamma config for transformer")
-parser.add_argument("--gamma_nhead", type=int, default=4, help="gamma config for transformer")
-parser.add_argument("--gamma_dim_feedforward", type=int, default=256, help="gamma config for transformer")
-parser.add_argument("--gamma_dropout", type=float, default=0.1, help="gamma config for transformer")
-
-parser.add_argument("--k_num_layers", type=int, default=6, help="k config for transformer")
-parser.add_argument("--k_d_model", type=int, default=256, help="k config for transformer")
-parser.add_argument("--k_nhead", type=int, default=8, help="k config for transformer")
-parser.add_argument("--k_dim_feedforward", type=int, default=512, help="k config for transformer")
-parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for transformer")
-
-# -------- sym_diff perceiver fourier args -------- #
-
-parser.add_argument("--sigma", type=float, default=100, help="config for perceiver fourier")
-parser.add_argument("--m", type=int, default=20, help="config for perceiver fourier")
-
-# -------- perceiver_gaussian args -------- #
-
-parser.add_argument("--pos_emb_size", type=int, default=256, help="config for perceiver fourier")
-parser.add_argument("--k_mlp_factor", type=int, default=2, help="config for perceiver fourier")
-
-# -------- transformer args -------- #
-
-parser.add_argument("--trans_num_layers", type=int, default=6, help="config for transformer")
-parser.add_argument("--trans_d_model", type=int, default=256, help="config for transformer")
-parser.add_argument("--trans_nhead", type=int, default=8, help="config for transformer")
-parser.add_argument("--trans_dim_feedforward", type=int, default=512, help="config for transformer")
-parser.add_argument("--trans_dropout", type=float, default=0., help="config for transformer")
-
 # -------- DiT args -------- #
 
-parser.add_argument("--out_channels", type=int, default=9, help="config for DiT")
-parser.add_argument("--x_scale", type=float, default=25.0, help="config for DiT")
 parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT")
 parser.add_argument("--depth", type=int, default=6, help="config for DiT")
 parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
 parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
-parser.add_argument("--subtract_x_0", action="store_true", help="config for DiT")
 
 parser.add_argument("--x_emb", type=str, default="fourier", help="config for DiT")
 
 # -------- DiT_GNN and DiT_DiT args -------- #
 
-parser.add_argument("--enc_out_channels", type=int, default=1, help="config for DiT_GNN")  # not used
 parser.add_argument("--enc_x_scale", type=float, default=25.0, help="config for DiT_GNN")
 parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_GNN")
 parser.add_argument("--enc_depth", type=int, default=4, help="config for DiT_GNN")
@@ -233,17 +159,6 @@ parser.add_argument("--enc_x_emb", type=str, default="linear", help="config for 
 parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_GNN")
 parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_GNN")
 parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_GNN")
-
-# -------- DiTGaussian_GNN args -------- #
-
-parser.add_argument("--pos_size", type=int, default=128, help="config for DiTGaussian_GNN")
-
-# -------- GNN_DiT args -------- #
-
-parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for GNN_GNN")
-parser.add_argument("--gamma_gnn_hidden_size", type=int, default=64, help="config for GNN_GNN")
-parser.add_argument("--gamma_gnn_out_size", type=int, default=64, help="config for GNN_GNN")
-parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="config for GNN_GNN")
 
 # -------- DiTEmb args -------- #
 
@@ -265,22 +180,10 @@ parser.add_argument("--t_hidden_size", type=int, default=32, help="config for De
 parser.add_argument("--pos_emb_gamma_1_size", type=int, default=32, help="config for Deepsets")
 parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
 
-# -------- sym_diff time args -------- #
-
-parser.add_argument("--enc_gnn_layers", type=int, default=2, help="config for DiTMessage")
-parser.add_argument("--enc_gnn_hidden_size", type=int, default=256, help="config for DiTMessage")
-
-# -------- sym_diff time args -------- #
-
-parser.add_argument("--num_bands", type=int, default=32, help="fourier time embedding config")
-parser.add_argument("--max_resolution", type=float, default=100, help="fourier time embedding config")
-parser.add_argument("--concat_t", action="store_true", help="fourier time embedding config")
-parser.add_argument("--t_fourier", action="store_true", help="time config for transformer")
-
 
 args = parser.parse_args()
-
-dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
+args.molecule = False
+args.n_dims = 2
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -324,20 +227,16 @@ if args.no_wandb:
     mode = 'disabled'
 else:
     mode = 'online' if args.online else 'offline'
-#kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
-#          'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
-kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
+kwargs = {'name': args.exp_name, 'project': 'toy_experiments', 'config': args,
           'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
 wandb.init(**kwargs)
 wandb.save('*.txt')
 
 # Retrieve toy dataset
-dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
+dataloaders, charge_scale = dataset.retrieve_dataloaders(args)  # NOTE
 
-# Create EGNN flow
-# vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
-# note that nodes_dist.sample is not filtered
-model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
+# Get model
+model, _, _ = get_model(args, device, None, None)
 model = model.to(device)
 optim = get_optim(args, model)
 scheduler = get_scheduler(args, optim)
@@ -385,7 +284,7 @@ def main():
     else:
         ema = None
         model_ema = model
-        model_ema_dp = model_dp  # how is this used?
+        model_ema_dp = model_dp
 
     best_nll_val = 1e8
     best_nll_test = 1e8
@@ -397,28 +296,21 @@ def main():
         start_epoch = time.time()
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=None,
-                    nodes_dist=nodes_dist, dataset_info=dataset_info,
-                    gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
+                    nodes_dist=None, dataset_info=None,
+                    gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=None)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
-        if epoch % args.test_epochs == 0 and epoch != 0:  # NOTE: LEO
-        #if epoch % args.test_epochs == 0:
+        if epoch % args.test_epochs == 0 and epoch != 0:
             if isinstance(model, en_diffusion.EnVariationalDiffusion):
                 if args.com_free:
-                    wandb.log(model.log_info(), commit=True)  # should be constant for l2
-            if not args.break_train_epoch:  # for debug
-                # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
-                validity_dict = analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
-                                 dataset_info=dataset_info, device=device,
-                                 prop_dist=prop_dist, n_samples=args.n_stability_samples)
-                mol_stable = validity_dict["mol_stable"]
+                    wandb.log(model.log_info(), commit=True)
             # compute average nll over the val/test set
             nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
-                           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
-                           property_norms=property_norms)
+                           partition='Val', device=device, dtype=dtype, nodes_dist=None,
+                           property_norms=None)
             nll_test = test(args=args, loader=dataloaders['test'], epoch=epoch, eval_model=model_ema_dp,
                             partition='Test', device=device, dtype=dtype,
-                            nodes_dist=nodes_dist, property_norms=property_norms)
+                            nodes_dist=None, property_norms=None)
 
             if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
                 best_nll_val = nll_val
@@ -434,28 +326,6 @@ def main():
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
-            # NOTE: added to save best model on mol stable
-            if mol_stable > best_mol_stable:
-                if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
-                    utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
-                    utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
-                    if scheduler is not None:
-                        utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
-                    if args.ema_decay > 0:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
-                    with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
-                        pickle.dump(args, f)
-
-                # ???
-                """
-                if args.save_model:
-                    utils.save_model(optim, 'outputs/%s/optim_%d.npy' % (args.exp_name, epoch))
-                    utils.save_model(model, 'outputs/%s/generative_model_%d.npy' % (args.exp_name, epoch))
-                    if args.ema_decay > 0:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_%d.npy' % (args.exp_name, epoch))
-                    with open('outputs/%s/args_%d.pickle' % (args.exp_name, epoch), 'wb') as f:
-                        pickle.dump(args, f)
-                """
             print('Val loss: %.4f \t Test loss:  %.4f' % (nll_val, nll_test))
             print('Best val loss: %.4f \t Best test loss:  %.4f' % (best_nll_val, best_nll_test))
             wandb.log({"Val loss ": nll_val}, commit=True)

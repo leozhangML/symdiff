@@ -11,9 +11,13 @@ from sym_nn.sym_nn import DiTGaussian_dynamics, DiT_DitGaussian_dynamics, DiTOnl
 
 
 def get_model(args, device, dataset_info, dataloader_train):
-    histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366 etc.
-    in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
-    nodes_dist = DistributionNodes(histogram)  # will sample over all nodes
+    if args.molecule:
+        histogram = dataset_info['n_nodes']  # e.g. qm9, 9: 83366 etc.
+        in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
+        nodes_dist = DistributionNodes(histogram)  # will sample over all nodes
+    else:
+        in_node_nf = 0
+        nodes_dist = None
 
     prop_dist = None
     if len(args.conditioning) > 0:
@@ -85,6 +89,7 @@ def get_model(args, device, dataset_info, dataloader_train):
 
             xh_hidden_size=args.xh_hidden_size,
             K=args.K,
+            pos_embedder_test=args.pos_embedder_test,
 
             enc_hidden_size=args.enc_hidden_size,
             enc_depth=args.enc_depth,
@@ -104,7 +109,7 @@ def get_model(args, device, dataset_info, dataloader_train):
 
             mlp_type=args.mlp_type,
 
-            n_dims=3,
+            n_dims=args.n_dims,
             device=device
         )
     
@@ -181,13 +186,15 @@ def get_model(args, device, dataset_info, dataloader_train):
         vdm = EnVariationalDiffusion(
             dynamics=net_dynamics,
             in_node_nf=in_node_nf,
-            n_dims=3,
+            n_dims=args.n_dims,
             timesteps=args.diffusion_steps,
             noise_schedule=args.diffusion_noise_schedule,
             noise_precision=args.diffusion_noise_precision,
             loss_type=args.diffusion_loss_type,
             norm_values=args.normalize_factors,
             include_charges=args.include_charges,
+
+            molecule=args.molecule,
 
             com_free=args.com_free,
             rho=args.rho,

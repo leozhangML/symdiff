@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=DiT_DiTGaussian_mlp4_small_gamma
+#SBATCH --job-name=small_DiT_DiTGaussian_no_ema_k_2
 
 # Using thet cluster srf_gpu_01 and node 5
 #SBATCH --cluster=srf_gpu_01
@@ -20,7 +20,7 @@
 
 # Make sure RAM Is enough otherwise it will crash
 #SBATCH --time=12-00:00:00  
-#SBATCH --mem=52G  
+#SBATCH --mem=32G  
 
 # Don't change unless you know why (look at examples and notes for more information)
 #SBATCH --ntasks=1
@@ -48,16 +48,17 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_mlp4_small_gamma --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name small_DiT_DiTGaussian_no_ema_k_2 --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu05/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
-                   --n_epochs 5000 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
+                   --n_epochs 5000 --batch_size 256 --lr 3e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.0 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
                    --n_stability_samples 500 --test_epochs 20 --wandb_usr zhangleo1209 --save_model True \
-                   --xh_hidden_size 184 --K 184 \
+                   --xh_hidden_size 126 --K 32 --pos_embedder_test 2 \
+                   --mlp_type swiglu \
                    --enc_hidden_size 32 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 32 \
-                   --hidden_size 384 --depth 12 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
+                   --hidden_size 128 --depth 6 --num_heads 4 --mlp_ratio 4.0 --mlp_dropout 0.0 \
                    --noise_dims 3 --noise_std 1.0 \
-                   --print_parameter_count 
+                   --print_parameter_count
 
 date -u
 

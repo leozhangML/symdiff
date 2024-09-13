@@ -81,7 +81,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
                   f"RegTerm: {reg_term.item():.1f}, "
                   f"GradNorm: {grad_norm:.1f}")
         nll_epoch.append(nll.item())
-        if (epoch % args.test_epochs == 0) and (i % args.visualize_every_batch == 0) and not (epoch == 0 and i == 0):
+        if (epoch % args.test_epochs == 0) and (i % args.visualize_every_batch == 0) and not (epoch == 0 and i == 0) and args.molecule:
             start = time.time()
             if len(args.conditioning) > 0:
                 save_and_sample_conditional(args, device, model_ema, prop_dist, dataset_info, epoch=epoch)

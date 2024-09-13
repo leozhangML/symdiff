@@ -294,10 +294,13 @@ class EnVariationalDiffusion(torch.nn.Module):
             timesteps: int = 1000, parametrization='eps', noise_schedule='learned',
             noise_precision=1e-4, loss_type='vlb', norm_values=(1., 1., 1.),
             norm_biases=(None, 0., 0.), include_charges=True, 
+            molecule=True,
             com_free=True, rho=None, sigma_min=None, sigma_max=None):
         super().__init__()  
  
         # norm_values=normalize_factors [1, 4, 1], norm_biases is default - how to scale xh, vlb is default
+
+        self.molecule = molecule
 
         assert loss_type in {'vlb', 'l2'}
         self.loss_type = loss_type
@@ -513,7 +516,10 @@ class EnVariationalDiffusion(torch.nn.Module):
             subspace_d = self.subspace_dimensionality(node_mask)
             kl_distance_x = gaussian_KL_for_dimension(mu_T_x, sigma_T_x, zeros, sigma_T_x, d=subspace_d)
 
-        return kl_distance_x + kl_distance_h
+        if self.molecule:
+            return kl_distance_x + kl_distance_h
+        else:
+            return kl_distance_x
 
     def compute_x_pred(self, net_out, zt, gamma_t):  # for sampling the final time-step
         """Commputes x_pred, i.e. the most likely prediction of x."""

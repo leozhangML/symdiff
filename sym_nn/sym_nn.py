@@ -4,12 +4,9 @@ import numpy as np
 
 from equivariant_diffusion.utils import remove_mean_with_mask, assert_mean_zero_with_mask, assert_correctly_masked
 from sym_nn.utils import qr, orthogonal_haar, compute_gradient_norm, GaussianLayer
-from sym_nn.perceiver import SymDiffPerceiverConfig, SymDiffPerceiver, SymDiffPerceiverDecoder, TensorPreprocessor, \
-                      t_emb_dim, concat_t_emb, positional_encoding, IdentityPreprocessor
 from sym_nn.dit import DiT, TimestepEmbedder
 
 from qm9.models import EGNN_dynamics_QM9
-from sym_nn.gnn import GNNEnc
 from timm.models.vision_transformer import Mlp
 
 
@@ -115,6 +112,214 @@ class DiTGaussian_dynamics(nn.Module):
 
 
 class DiT_DitGaussian_dynamics(nn.Module):
+
+    def __init__(
+        self,
+        args,
+        in_node_nf: int,
+        context_node_nf: int,
+
+        xh_hidden_size: int,
+        K: int,
+        pos_embedder_test: int,
+
+        enc_hidden_size: int,
+        enc_depth: int,
+        enc_num_heads: int,
+        enc_mlp_ratio: float,
+
+        dec_hidden_features: int,
+
+        hidden_size: int,
+        depth: int,
+        num_heads: int,
+        mlp_ratio: float,
+        mlp_dropout: float,
+
+        enc_concat_h: bool = False,
+
+        noise_dims: int = 0,
+        noise_std: float = 1.0,
+
+        mlp_type: str = "mlp",
+
+        n_dims: int = 3,
+        device: str = "cpu"
+    ) -> None:
+        super().__init__()
+
+        self.args = args
+        self.n_dims = n_dims
+
+        self.gaussian_embedder = GaussianLayer(K=K)
+        self.gaussian_embedder_test = GaussianLayer(K=K)
+
+        self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
+        self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
+
+        self.pos_embedder_test = nn.Linear(K, pos_embedder_test)
+
+        self.noise_dims = noise_dims
+        self.noise_std = noise_std
+
+        self.enc_concat_h = enc_concat_h  # NOTE: not used for now
+
+        if enc_concat_h:
+            self.gamma_enc_input_dim = n_dims + in_node_nf + hidden_size-xh_hidden_size + noise_dims
+        else:
+            self.gamma_enc_input_dim = n_dims + pos_embedder_test + noise_dims
+
+        # enc_out_channels not used 
+        self.gamma_enc = DiT(
+            out_channels=0, x_scale=0.0, 
+            hidden_size=enc_hidden_size, depth=enc_depth, 
+            num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+            use_fused_attn=True, x_emb="linear", 
+            input_dim=self.gamma_enc_input_dim,
+            mlp_type=mlp_type
+        ).to(device)
+
+        # add t emb here
+        self.gamma_dec = Mlp(
+            in_features=enc_hidden_size, hidden_features=dec_hidden_features,
+            out_features=n_dims**2
+        ).to(device)
+
+        self.model = DiT(
+            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
+            hidden_size=hidden_size, depth=depth, 
+            num_heads=num_heads, mlp_ratio=mlp_ratio, 
+            use_fused_attn=True, x_emb="identity", mlp_dropout=mlp_dropout,
+            mlp_type=mlp_type
+            )
+
+        self.device = device
+
+        def _basic_init(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+
+        self.xh_embedder.apply(_basic_init)
+        self.pos_embedder.apply(_basic_init)
+        self.gamma_dec.apply(_basic_init)
+
+    def forward(self):
+        raise NotImplementedError
+
+    def gamma(self, t, x, node_mask):
+    
+        bs, n_nodes, _ = x.shape
+
+        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        pos_emb_test = self.gaussian_embedder_test(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb_test = torch.sum(self.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, pos_embedder_test]
+
+        g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
+
+        if self.noise_dims > 0:
+            g_inv_x = torch.cat([
+                g_inv_x, 
+                node_mask * self.noise_std * torch.randn(
+                    bs, n_nodes, self.noise_dims, device=self.device
+                    )
+                ], dim=-1)
+
+        g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)
+
+        # [bs, n_nodes, hidden_size]
+        gamma = node_mask * self.gamma_enc(
+            g_inv_x, t.squeeze(-1), node_mask.squeeze(-1), 
+            use_final_layer=False
+            )
+
+        # decoded summed representation into gamma - this is S_n-invariant
+        gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
+        # [bs, 3, 3]
+        gamma = qr(
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+            )[0]
+        gamma = torch.bmm(gamma, g.transpose(2, 1))
+
+        return gamma
+
+    def k(self, t, x, h, node_mask):
+
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        pos_emb = self.gaussian_embedder(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
+        xh = self.xh_embedder(torch.cat([x, h], dim=-1))
+        xh = node_mask * torch.cat([xh, pos_emb], dim=-1)
+        xh = node_mask * self.backbone(xh, t.squeeze(-1), node_mask.squeeze(-1))
+
+        return xh
+
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):
+        # t: [bs, 1]
+        # xh: [bs, n_nodes, dims]
+        # node_mask: [bs, n_nodes, 1]
+        # context: [bs, n_nodes, context_node_nf]
+        # return [bs, n_nodes, dims]
+
+        assert context is None
+        assert gamma is None
+
+        bs, n_nodes, _ = xh.shape
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:]
+
+        x = remove_mean_with_mask(x, node_mask)
+
+        if not self.args.com_free:
+            assert gamma is not None
+            # Karras et al. (2022) scaling
+            x = x / torch.sqrt(
+                self.args.sigma_data**2 + 
+                torch.exp(gamma[1]).unsqueeze(-1)
+                )
+
+        gamma = self.gamma(t, x, node_mask)
+
+        gamma_inv_x = torch.bmm(x, gamma.clone())
+        xh = self.k(t, gamma_inv_x, h, node_mask)
+
+        x = xh[:, :, :self.n_dims]
+        h = xh[:, :, self.n_dims:] 
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+
+        x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([x, h], dim=-1)
+
+        assert_correctly_masked(xh, node_mask)
+
+        return xh
+
+    def print_parameter_count(self):
+
+        xh_embedder_params = sum(p.numel() for p in self.xh_embedder.parameters() if p.requires_grad)
+        pos_embedder_params = sum(p.numel() for p in self.pos_embedder.parameters() if p.requires_grad)
+        pos_embedder_test_params = sum(p.numel() for p in self.pos_embedder_test.parameters() if p.requires_grad)
+        gaussian_embedder_params = sum(p.numel() for p in self.gaussian_embedder.parameters() if p.requires_grad)
+        gaussian_embedder_test_params = sum(p.numel() for p in self.gaussian_embedder_test.parameters() if p.requires_grad)
+        embedder_params = xh_embedder_params + pos_embedder_params + pos_embedder_test_params + gaussian_embedder_params + gaussian_embedder_test_params
+
+        gamma_enc_params = sum(p.numel() for p in self.gamma_enc.parameters() if p.requires_grad)
+        gamma_dec_params = sum(p.numel() for p in self.gamma_dec.parameters() if p.requires_grad)
+        gamma_params = gamma_enc_params + gamma_dec_params
+        
+        backbone_params = sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)
+
+        print(f"embedder_params: {embedder_params}; gamma_params: {gamma_params}; backbone_params: {backbone_params}")
+
+
+class DiT_DitGaussian_add_noise_dynamics(nn.Module):
 
     def __init__(
         self,
@@ -239,9 +444,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
-        pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb = self.gaussian_embedder(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
         pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
-        
+
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        pos_emb_test = self.gaussian_embedder_test(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb_test = torch.sum(self.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
         g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
         if self.enc_concat_h:
@@ -259,10 +468,6 @@ class DiT_DitGaussian_dynamics(nn.Module):
             g_inv_x = g_inv_x + node_mask * self.noise_std * torch.randn(
                     bs, n_nodes, self.n_dims, device=self.device
                     )
-
-        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
-        pos_emb_test = self.gaussian_embedder_test(g_inv_x, node_mask)  # [bs, n_nodes, n_nodes, K]
-        pos_emb_test = torch.sum(self.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
 
         #g_inv_x = torch.cat([g_inv_x, pos_emb.clone()], dim=-1)
         g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)

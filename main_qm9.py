@@ -260,6 +260,8 @@ parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for D
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
 parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
 
+parser.add_argument("--pos_embedder_test", type=int, default=4, help="config for DiTGaussian")
+
 # -------- Deepsets DiTGaussian args -------- #
 
 parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
@@ -284,6 +286,8 @@ parser.add_argument("--t_fourier", action="store_true", help="time config for tr
 
 
 args = parser.parse_args()
+args.molecule = True
+args.n_dims = 3
 
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 
@@ -326,7 +330,6 @@ if args.resume is not None:
     print(args)
 
 utils.create_folders(args)
-# print(args)
 
 
 # Wandb config
