@@ -3,19 +3,49 @@ import numpy as np
 
 
 class EMA():
-    def __init__(self, beta):
+    def __init__(self, beta, gamma_beta, k_beta, use_separate_emas=False):
         super().__init__()
         self.beta = beta
+        self.gamma_beta = gamma_beta
+        self.k_beta = k_beta
+        self.use_separate_emas = use_separate_emas
 
     def update_model_average(self, ma_model, current_model):
-        for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
-            old_weight, up_weight = ma_params.data, current_params.data
-            ma_params.data = self.update_average(old_weight, up_weight)
+        if not self.use_separate_emas:
+            for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
+                old_weight, up_weight = ma_params.data, current_params.data
+                ma_params.data = self.update_average(old_weight, up_weight)
+
+        else:
+            # Do the update model averaging for model.gamma_enc, model.gamma_dec, model.dynamics.k
+            if 
+            for current_params, ma_params in zip(current_model.gamma_enc.parameters(), ma_model.gamma_enc.parameters()):
+                old_weight, up_weight = ma_params.data, current_params.data
+                ma_params.data = self.update_average_gamma(old_weight, up_weight)
+
+            for current_params, ma_params in zip(current_model.gamma_dec.parameters(), ma_model.gamma_dec.parameters()):
+                old_weight, up_weight = ma_params.data, current_params.data
+                ma_params.data = self.update_average_gamma(old_weight, up_weight)
+
+            for current_params, ma_params in zip(current_model.dynamics.k.parameters(), ma_model.dynamics.k.parameters()):
+                old_weight, up_weight = ma_params.data, current_params.data
+                ma_params.data = self.update_average_k(old_weight, up_weight)
 
     def update_average(self, old, new):
-        if old is None:
+        if not self.use_separate_emas:
+            if old is None:
+                return new
+            return old * self.beta + (1 - self.beta) * new
+
+    def update_average_gamma(self, old, new):
+        if old is None and self.gamma_beta <= 0:
             return new
-        return old * self.beta + (1 - self.beta) * new
+        return old * self.gamma_beta + (1 - self.gamma_beta) * new
+
+    def update_average_k(self, old, new):
+        if old is None and self.k_beta <= 0:
+            return new
+        return old * self.k_beta + (1 - self.k_beta) * new
 
 
 def sum_except_batch(x):

@@ -81,7 +81,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
             scheduler.step()
 
         # Update EMA if enabled.
-        if args.ema_decay > 0:
+        if args.ema_decay > 0 or args.use_separate_ema:
             ema.update_model_average(model_ema, model)
 
         if args.print_grad_norms:
