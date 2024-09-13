@@ -13,6 +13,25 @@ from sym_nn.sym_nn import SymDiffPerceiver_dynamics, SymDiffTransformer_dynamics
                           DiTGaussian_GNN_dynamics, PercieverGaussian_final_dynamics
 
 
+
+def freeze_model_part(model, model_part):
+    if model_part == "gamma":
+        # Freeze the encoder by turning off gradients
+        for param in model.dynamics.gamma_enc.parameters():
+            param.requires_grad = False
+        for param in model.dynamics.gamma_dec.parameters():
+            param.requires_grad = False
+
+    elif model_part == "k":
+        # Freeze the decoder by turning off gradients
+        for param in model.dynamics.k.parameters():
+            param.requires_grad = False
+    else:
+        raise ValueError("model_part must be either 'k; or 'gamma'")
+    
+    return model
+
+
 def get_model(args, device, dataset_info, dataloader_train):
 
     # Get the distribution over nodes for sampling
@@ -589,6 +608,9 @@ def get_model(args, device, dataset_info, dataloader_train):
             sigma_min=args.sigma_min,
             sigma_max=args.sigma_max
             )
+
+        if args.freeze_model_parts:
+            vdm = freeze_model_part(vdm, args.model_part_to_freeze)
 
         return vdm, nodes_dist, prop_dist
 
