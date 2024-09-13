@@ -18,7 +18,6 @@ class EMA():
 
         else:
             # Do the update model averaging for model.gamma_enc, model.gamma_dec, model.dynamics.k
-            if 
             for current_params, ma_params in zip(current_model.gamma_enc.parameters(), ma_model.gamma_enc.parameters()):
                 old_weight, up_weight = ma_params.data, current_params.data
                 ma_params.data = self.update_average_gamma(old_weight, up_weight)
