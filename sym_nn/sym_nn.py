@@ -1965,7 +1965,11 @@ class DiT_DitGaussian_dynamics(nn.Module):
         use_separate_dropout = False,
         dropout_gamma_enc = 0,
         dropout_gamma_dec = 0,
-        dropout_k = 0
+        dropout_k = 0,
+        use_separate_K = False,
+        gamma_K = 0,
+        k_K = 0,
+        pos_emb_gamma_projection_dim = 0
     ) -> None:
         super().__init__()
 
@@ -1976,15 +1980,22 @@ class DiT_DitGaussian_dynamics(nn.Module):
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
         else:
-            self.gaussian_embedder_gamma = GaussianLayer(K=K)
-            self.gaussian_embedder_k = GaussianLayer(K=K)
+            if use_separate_K:
+                self.gaussian_embedder_gamma = GaussianLayer(K=gamma_K)
+                self.gaussian_embedder_k = GaussianLayer(K=k_K)
+            else:
+                self.gaussian_embedder_gamma = GaussianLayer(K=K)
+                self.gaussian_embedder_k = GaussianLayer(K=K)
 
         self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
 
         if not self.use_separate_gauss_embs:
             self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
         else:
-            self.pos_embedder_gamma = nn.Linear(K, hidden_size-xh_hidden_size)
+            if pos_emb_gamma_projection_dim != 0:
+                self.pos_embedder_gamma = nn.Linear(K, pos_emb_gamma_projection_dim)
+            else:
+                self.pos_embedder_gamma = nn.Linear(K, hidden_size-xh_hidden_size)
             self.pos_embedder_k = nn.Linear(K, hidden_size-xh_hidden_size)
 
 
