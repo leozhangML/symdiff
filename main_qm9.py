@@ -45,7 +45,8 @@ parser.add_argument('--diffusion_loss_type', type=str, default='l2',
 
 # -------- optimiser args -------- #
 
-parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma")
+parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma",
+                    default=False)
 
 # Args for the optimiser for K
 parser.add_argument('--lr_K', type=float, default=2e-4)
@@ -149,6 +150,16 @@ parser.add_argument('--normalization_factor', type=float, default=1,
 parser.add_argument('--aggregation_method', type=str, default='sum',
                     help='"sum" or "mean"')
 
+# Use separate ema
+parser.add_argument('--use_separate_ema', type=eval, default=False,
+                    help='Use separate ema for the gamma and k')                    
+parser.add_argument('--ema_decay_K', type=float, default=0.999,
+                    help='Amount of EMA decay, 0 means off. A reasonable value'
+                         ' is 0.999.')
+parser.add_argument('--ema_decay_gamma', type=float, default=0.999,
+                    help='Amount of EMA decay, 0 means off. A reasonable value'
+                         ' is 0.999.')
+
 # -------- sym_diff args -------- #
 
 parser.add_argument("--sigma_data", type=float, default=1.5, help="for VE scaling of inputs")
@@ -217,6 +228,7 @@ parser.add_argument("--m", type=int, default=20, help="config for perceiver four
 
 parser.add_argument("--pos_emb_size", type=int, default=256, help="config for perceiver fourier")
 parser.add_argument("--k_mlp_factor", type=int, default=2, help="config for perceiver fourier")
+
 
 # -------- transformer args -------- #
 
@@ -438,25 +450,54 @@ def main():
     else:
         model_dp = model
 
-    # Initialize model copy for exponential moving average of params.
-    if args.ema_decay > 0:
+
+    # Create EMA either for both models or separate for gamma and K
+    if not args.use_separate_ema:
+        if args.ema_decay > 0:
+            model_ema = copy.deepcopy(model)
+            ema = flow_utils.EMA(args.ema_decay)
+
+            # NOTE: LEO
+            if args.resume is not None:
+                ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
+                model_ema.load_state_dict(ema_state_dict)
+
+            if args.dp and torch.cuda.device_count() > 1:
+                model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
+            else:
+                model_ema_dp = model_ema
+            
+        else:
+            ema = None
+            model_ema = model
+            model_ema_dp = model_dp  # how is this used?
+
+
+    else:
         model_ema = copy.deepcopy(model)
+        model_gamma_ema_enc = copy.deepcopy(model.gamma_enc)
+        model_gamma_ema_dec = copy.deepcopy(model.gamma_dec)
+        model_k_ema = copy.deepcopy(model.dynamics.k)
+
         ema = flow_utils.EMA(args.ema_decay)
+        emma_gamma_enc = flow_utils.EMA(args.ema_decay_gamma)
+        emma_gamma_dec = flow_utils.EMA(args.ema_decay_gamma)
+        emma_k = flow_utils.EMA(args.ema_decay_K)
 
         # NOTE: LEO
         if args.resume is not None:
-            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
-            model_ema.load_state_dict(ema_state_dict)
+            gamma_enc_state_dict = torch.load(join('outputs', args.resume, 'gamma_enc_ema.npy'))
+            model_ema.gamma_enc.load_state_dict(gamma_enc_state_dict)
+            gamma_dec_state_dict = torch.load(join('outputs', args.resume, 'gamma_dec_ema.npy'))
+            model_ema.gamma_dec.load_state_dict(gamma_dec_state_dict)
+            k_state_dict = torch.load(join('outputs', args.resume, 'k_ema.npy'))
+            model_ema.dynamics.k.load_state_dict(k_state_dict)
 
         if args.dp and torch.cuda.device_count() > 1:
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
-            model_ema_dp = model_ema
-        
-    else:
-        ema = None
-        model_ema = model
-        model_ema_dp = model_dp  # how is this used?
+            model_ema_dp = model_ema                          
+
 
     best_nll_val = 1e8
     best_nll_test = 1e8
@@ -466,11 +507,6 @@ def main():
         wandb.log({"Epoch": epoch}, commit=True)
         print(f"--- Epoch {epoch} ---")
 
-        #print("TEST WITH VAL FIRST")
-        #nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model,
-        #           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
-        #           property_norms=property_norms)
-
         start_epoch = time.time()
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
@@ -479,18 +515,18 @@ def main():
                     scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
-        #if epoch % args.test_epochs == 0 and epoch != 0:  # NOTE: LEO
-        if epoch % args.test_epochs == 0:
+        if epoch % args.test_epochs == 0 or epoch == args.n_epochs - 1 or epoch == args.start_epoch:
             if isinstance(model, en_diffusion.EnVariationalDiffusion):
                 if args.com_free:
                     wandb.log(model.log_info(), commit=True)  # should be constant for l2
             if not args.break_train_epoch:  # for debug
-                # samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
+                # Samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
                 validity_dict = analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
                                  dataset_info=dataset_info, device=device,
                                  prop_dist=prop_dist, n_samples=args.n_stability_samples)
                 mol_stable = validity_dict["mol_stable"]
-            # compute average nll over the val/test set
+            
+            # Compute average nll over the val/test set
             nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
                            partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
                            property_norms=property_norms)
@@ -498,10 +534,11 @@ def main():
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
-            if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
+            # Save best model
+            if nll_val < best_nll_val: 
                 best_nll_val = nll_val
                 best_nll_test = nll_test
-                if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
+                if args.save_model:
                     args.current_epoch = epoch + 1
 
                     # Save optimisers
@@ -514,15 +551,25 @@ def main():
                     utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
-                    if args.ema_decay > 0:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
+
+                    # Check if we are doing separate EMA or not
+                    if not args.use_separate_ema:
+                        if args.ema_decay > 0:
+                            utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
+                    else:
+                        # Save gamma enc, gamma dec and k emas separately
+                        utils.save_model(model_ema.gamma_enc, 'outputs/%s/gamma_enc_ema.npy' % args.exp_name)
+                        utils.save_model(model_ema.gamma_dec, 'outputs/%s/gamma_dec_ema.npy' % args.exp_name)
+                        utils.save_model(model_ema.dynamics.k, 'outputs/%s/k_ema.npy' % args.exp_name)                        
+
+                    # Save args
                     with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
-            # NOTE: added to save best model on mol stable
+            # Save best model based on mol_stable
             if mol_stable > best_mol_stable:
-                if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
-
+                if args.save_model:
+                    # Check for optimiser
                     if not args.use_separate_optimisers:
                         utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
                     else:
@@ -530,10 +577,19 @@ def main():
                         utils.save_model(optim_gamma, 'outputs/%s/optim_gamma_ms.npy' % args.exp_name)                                                                                
                     utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
 
+                    # Check for scheduler
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
-                    if args.ema_decay > 0:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
+
+                    if not args.use_separate_ema:
+                        if args.ema_decay > 0:  # EMA CODE
+                            utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
+                        else:
+                        # Save gamma enc, gamma dec and k emas separately
+                            utils.save_model(model_ema.gamma_enc, 'outputs/%s/gamma_enc_ema_ms.npy' % args.exp_name)
+                            utils.save_model(model_ema.gamma_dec, 'outputs/%s/gamma_dec_ema_ms.npy' % args.exp_name)
+                            utils.save_model(model_ema.dynamics.k, 'outputs/%s/k_ema_ms.npy' % args.exp_name)                            
+
                     with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)
 
