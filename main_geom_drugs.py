@@ -259,7 +259,7 @@ if args.resume is not None:
     # Update the arguments
     args.resume = resume
     args.break_train_epoch = False
-    args.exp_name = exp_name
+    args.exp_name = exp_name  # add _resume to the name
     args.start_epoch = start_epoch
     args.wandb_usr = wandb_usr
     print(args)
@@ -309,7 +309,6 @@ print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.re
 if args.print_parameter_count:
     model.dynamics.print_parameter_count()
 
-
 # Set up gradient norm queue
 gradnorm_queue = utils.Queue()
 gradnorm_queue.add(3000)        # add large value that will be flushed.
@@ -321,11 +320,12 @@ def check_mask_correct(variables, node_mask):
 
     Args:
         variables (list): List of variables to check.
-        node_mask (torch.Tensor): Node mask to check against.
+        node_mask (torch.Tensor):s Node mask to check against.
     """
     for variable in variables:
         if len(variable) > 0:
             assert_correctly_masked(variable, node_mask)
+
 
 def main():
     # If resuming, load the model and optimizer state dicts.
@@ -384,8 +384,8 @@ def main():
                     gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
-        # Check if we should test the model
-        if epoch % args.test_epochs == 0:
+        # Check if we should test the model (last, first, or every test_epochs)
+        if epoch % args.test_epochs == 0 or epoch == args.n_epochs - 1 or epoch == start_epoch: 
             if isinstance(model, en_diffusion.EnVariationalDiffusion):
                 if args.com_free:
                     wandb.log(model.log_info(), commit=True)  # should be constant for l2                
@@ -432,17 +432,6 @@ def main():
                         utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
                     with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
                         pickle.dump(args, f)            
-
-
-            # Save the model every epoch
-            # if args.save_model:
-            #     utils.save_model(optim, 'outputs/%s/optim_%d.npy' % (args.exp_name, epoch))
-            #     utils.save_model(model, 'outputs/%s/generative_model_%d.npy' % (args.exp_name, epoch))
-            #     if args.ema_decay > 0:
-            #         utils.save_model(model_ema, 'outputs/%s/generative_model_ema_%d.npy' % (args.exp_name, epoch))
-            #     with open('outputs/%s/args_%d.pickle' % (args.exp_name, epoch), 'wb') as f:
-            #         pickle.dump(args, f)
-
 
             print('Val loss: %.4f \t Test loss:  %.4f' % (nll_val, nll_test))
             print('Best val loss: %.4f \t Best test loss:  %.4f' % (best_nll_val, best_nll_test))
