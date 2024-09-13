@@ -556,7 +556,6 @@ def main():
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
 
-                    if not args.use_separate_ema:
                     if args.ema_decay > 0 or args.use_separate_ema:
                         utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
 
