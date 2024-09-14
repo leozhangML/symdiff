@@ -2,7 +2,6 @@
 *.pyc
 data/*
 .idea*
-bash.sh
 kohler/cache/*
 *.ipynb
 .
@@ -20,7 +19,6 @@ bash_qm9_analyze.sh
 beautiful_figures/ovito_images/*
 *toy/samples/*
 *toy/loss_components/*
-qm9.sh
 build/
 dist/
 EN_diffusion.egg-info/
@@ -29,7 +27,5 @@ EN_diffusion.egg-info/
 qm9/property_prediction/outputs/*
 qm9_conditional.sh
 figures/
-geom_drugs.sh
 test.py
 view_data.ipynb
-run.sh
