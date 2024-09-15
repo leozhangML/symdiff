@@ -24,7 +24,7 @@ def compute_loss_and_nll(args, generative_model, nodes_dist, x, h, node_mask, ed
 
         N = node_mask.squeeze(2).sum(1).long()  # [bs]
 
-        log_pN = nodes_dist.log_prob(N)
+        log_pN = nodes_dist.log_prob(N) if args.molecule else torch.zeros_like(nll)
 
         assert nll.size() == log_pN.size()
         nll = nll - log_pN  # include likelihood of the node number

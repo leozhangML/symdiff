@@ -141,6 +141,7 @@ def main():
         args.normalization_factor = 1
     if not hasattr(args, 'aggregation_method'):
         args.aggregation_method = 'sum'
+
     if not hasattr(args, 'mlp_type'):  # LEO
         print("mlp_type not found!")
         args.mlp_type = 'mlp'
@@ -153,6 +154,12 @@ def main():
     if not hasattr(args, 'sigma_max'):  # LEO
         print("sigma_max not found!")
         args.sigma_max = None
+    if not hasattr(args, 'molecule'):  # LEO
+        print("molecule not found!")
+        args.molecule = True
+    if not hasattr(args, 'n_dims'):  # LEO
+        print("n_dims not found!")
+        args.n_dims = 3
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")

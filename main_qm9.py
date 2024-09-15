@@ -146,121 +146,34 @@ parser.add_argument("--sigma_max", type=float, default=10, help="VE schedule")
 parser.add_argument("--print_grad_norms", action="store_true", help="whether to show the gamma and k grad norms")
 parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
-# -------- sym_diff perceiver args -------- #
+# -------- DiTGaussian args -------- #
 
-parser.add_argument("--context_hidden_size", type=int, default=512, help="preprocessor config for perceiver")
+parser.add_argument("--xh_hidden_size", type=int, default=128, help="config for DiTGaussian")
+parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
+parser.add_argument("--pos_embedder_test", type=int, default=4, help="config for DiTGaussian")
 
-parser.add_argument("--gamma_num_latents", type=int, default=64, help="gamma config for perceiver")
-parser.add_argument("--gamma_d_latents", type=int, default=128, help="gamma config for perceiver")
-parser.add_argument("--gamma_n_pad", type=int, default=61, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_blocks", type=int, default=1, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_self_attends_per_block", type=int, default=3, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_self_attention_heads", type=int, default=4, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_cross_attention_heads", type=int, default=4, help="gamma config for perceiver")
-parser.add_argument("--gamma_attention_probs_dropout_prob", type=float, default=0.1, help="gamma config for perceiver")
-parser.add_argument("--gamma_pos_num_channels", type=int, default=64, help="gamma config for perceiver")
-parser.add_argument("--gamma_num_heads", type=int, default=4, help="gamma config for perceiver")
-
-parser.add_argument("--k_num_latents", type=int, default=128, help="k config for perceiver")
-parser.add_argument("--k_d_latents", type=int, default=256, help="k config for perceiver")
-parser.add_argument("--k_n_pad", type=int, default=55, help="k config for perceiver")
-parser.add_argument("--k_num_blocks", type=int, default=1, help="k config for perceiver")
-parser.add_argument("--k_num_self_attends_per_block", type=int, default=10, help="k config for perceiver")
-parser.add_argument("--k_num_self_attention_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_num_cross_attention_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_attention_probs_dropout_prob", type=float, default=0.1, help="k config for perceiver")
-parser.add_argument("--k_enc_mlp_factor", type=int, default=2, help="k config for perceiver")
-
-parser.add_argument("--k_pos_num_channels", type=int, default=64, help="k config for perceiver")
-parser.add_argument("--k_num_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_decoder_self_attention", action="store_true", help="k config for perceiver")
-parser.add_argument("--k_num_self_heads", type=int, default=4, help="k config for perceiver")
-parser.add_argument("--k_query_residual", action="store_true", help="k config for perceiver")
-
-parser.add_argument("--decoder_hidden_size", type=int, default=256, help="k config for perceiver")
-
-# -------- sym_diff transformer args -------- #
-
-parser.add_argument("--gamma_num_enc_layers", type=int, default=2, help="gamma config for transformer")
-parser.add_argument("--gamma_num_dec_layers", type=int, default=2, help="gamma config for transformer")
-parser.add_argument("--gamma_d_model", type=int, default=128, help="gamma config for transformer")
-parser.add_argument("--gamma_nhead", type=int, default=4, help="gamma config for transformer")
-parser.add_argument("--gamma_dim_feedforward", type=int, default=256, help="gamma config for transformer")
-parser.add_argument("--gamma_dropout", type=float, default=0.1, help="gamma config for transformer")
-
-parser.add_argument("--k_num_layers", type=int, default=6, help="k config for transformer")
-parser.add_argument("--k_d_model", type=int, default=256, help="k config for transformer")
-parser.add_argument("--k_nhead", type=int, default=8, help="k config for transformer")
-parser.add_argument("--k_dim_feedforward", type=int, default=512, help="k config for transformer")
-parser.add_argument("--k_dropout", type=float, default=0.1, help="k config for transformer")
-
-# -------- sym_diff perceiver fourier args -------- #
-
-parser.add_argument("--sigma", type=float, default=100, help="config for perceiver fourier")
-parser.add_argument("--m", type=int, default=20, help="config for perceiver fourier")
-
-# -------- perceiver_gaussian args -------- #
-
-parser.add_argument("--pos_emb_size", type=int, default=256, help="config for perceiver fourier")
-parser.add_argument("--k_mlp_factor", type=int, default=2, help="config for perceiver fourier")
-
-# -------- transformer args -------- #
-
-parser.add_argument("--trans_num_layers", type=int, default=6, help="config for transformer")
-parser.add_argument("--trans_d_model", type=int, default=256, help="config for transformer")
-parser.add_argument("--trans_nhead", type=int, default=8, help="config for transformer")
-parser.add_argument("--trans_dim_feedforward", type=int, default=512, help="config for transformer")
-parser.add_argument("--trans_dropout", type=float, default=0., help="config for transformer")
-
-# -------- DiT args -------- #
-
-parser.add_argument("--out_channels", type=int, default=9, help="config for DiT")
-parser.add_argument("--x_scale", type=float, default=25.0, help="config for DiT")
 parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT")
 parser.add_argument("--depth", type=int, default=6, help="config for DiT")
 parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
 parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
-parser.add_argument("--subtract_x_0", action="store_true", help="config for DiT")
+parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for DiTEmb")
 
-parser.add_argument("--x_emb", type=str, default="fourier", help="config for DiT")
 
-# -------- DiT_GNN and DiT_DiT args -------- #
+# -------- DiT_DiTGaussian args -------- #
 
-parser.add_argument("--enc_out_channels", type=int, default=1, help="config for DiT_GNN")  # not used
-parser.add_argument("--enc_x_scale", type=float, default=25.0, help="config for DiT_GNN")
 parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_GNN")
 parser.add_argument("--enc_depth", type=int, default=4, help="config for DiT_GNN")
 parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT_GNN")
 parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_GNN")
+
 parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_GNN")
 
-parser.add_argument("--enc_x_emb", type=str, default="linear", help="config for DiT_GNN and DiT_DiT")
 parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_GNN")
+
 parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_GNN")
 parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_GNN")
 
-# -------- DiTGaussian_GNN args -------- #
-
-parser.add_argument("--pos_size", type=int, default=128, help="config for DiTGaussian_GNN")
-
-# -------- GNN_DiT args -------- #
-
-parser.add_argument("--gamma_gnn_layers", type=int, default=4, help="config for GNN_GNN")
-parser.add_argument("--gamma_gnn_hidden_size", type=int, default=64, help="config for GNN_GNN")
-parser.add_argument("--gamma_gnn_out_size", type=int, default=64, help="config for GNN_GNN")
-parser.add_argument("--gamma_dec_hidden_size", type=int, default=32, help="config for GNN_GNN")
-
-# -------- DiTEmb args -------- #
-
-parser.add_argument("--xh_hidden_size", type=int, default=128, help="config for DiTEmb")
-parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for DiTEmb")
-
-# -------- DiTGaussian args -------- #
-
-parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
 parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
-
-parser.add_argument("--pos_embedder_test", type=int, default=4, help="config for DiTGaussian")
 
 # -------- Deepsets DiTGaussian args -------- #
 
@@ -271,18 +184,6 @@ parser.add_argument("--t_hidden_size", type=int, default=32, help="config for De
 
 parser.add_argument("--pos_emb_gamma_1_size", type=int, default=32, help="config for Deepsets")
 parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
-
-# -------- sym_diff time args -------- #
-
-parser.add_argument("--enc_gnn_layers", type=int, default=2, help="config for DiTMessage")
-parser.add_argument("--enc_gnn_hidden_size", type=int, default=256, help="config for DiTMessage")
-
-# -------- sym_diff time args -------- #
-
-parser.add_argument("--num_bands", type=int, default=32, help="fourier time embedding config")
-parser.add_argument("--max_resolution", type=float, default=100, help="fourier time embedding config")
-parser.add_argument("--concat_t", action="store_true", help="fourier time embedding config")
-parser.add_argument("--t_fourier", action="store_true", help="time config for transformer")
 
 
 args = parser.parse_args()
@@ -295,7 +196,6 @@ atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-#args.cuda = False
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
 

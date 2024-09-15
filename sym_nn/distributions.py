@@ -13,8 +13,13 @@ class Distribution(ABC):
         pass
 
     def sample(self, n):
-        # return dict of positions, atom_mask, 
-        # edge_mask, one_hot
+        """
+        Return dict of:
+        positions: [n, 2, 2],
+        atom_mask: [n, 2, 1],
+        edge_mask: torch.empty(n),
+        one_hot: [n, 2, 1]
+        """
         raise NotImplementedError
 
 
@@ -27,9 +32,9 @@ class TestDistribution(Distribution):
 
     def sample(self, n, rotate=False):
 
-        radii = self.min_radius + torch.rand(n) * (
+        radii = self.min_radius + torch.rand(n, 1) * (
             self.max_radius - self.min_radius
-        ).unsqueeze(-1)
+        )
 
         # [n, 2]
         if rotate:
@@ -49,9 +54,9 @@ class TestDistribution(Distribution):
             dim=1
             )
 
-        atom_mask = torch.ones(n, 2, 2)
-        edge_mask = torch.empty(n)
-        one_hot = torch.zeros(n, 2, 2)
+        atom_mask = torch.ones(n, 2)
+        edge_mask = torch.empty(n, 2, 2)
+        one_hot = torch.zeros(n, 2, 1)
 
         return {"positions": positions, "atom_mask": atom_mask, 
                 "edge_mask": edge_mask, "one_hot": one_hot}
@@ -88,7 +93,7 @@ def retrieve_dataloaders(args):
         val_dataset = torch.load(os.path.join(toy_dataset_path, "valid.pt"))
         test_dataset = torch.load(os.path.join(toy_dataset_path, "test.pt"))
     else:
-        distribution = retrieve_dataloaders(args)
+        distribution = retrieve_distribution(args)
         train_dataset = ProcessedDataset(distribution.sample(args.toy_train_n, rotate=args.toy_train_rotate))
         val_dataset = ProcessedDataset(distribution.sample(args.toy_val_n))
         test_dataset = ProcessedDataset(distribution.sample(args.toy_test_n))

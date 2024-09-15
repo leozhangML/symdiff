@@ -226,7 +226,7 @@ class VENoiseSchedule(torch.nn.Module):
             torch.zeros([timesteps+1]),
             requires_grad=False
         )
-        # need to use timesteps+1??? as we sample in {0, ..., T}
+        # need to use timesteps+1 as we sample in {0, ..., T}
         self.log_sigmas2 = torch.nn.Parameter(
             torch.log(
                 ve_schedule(timesteps+1, rho=rho, 
@@ -326,9 +326,9 @@ class EnVariationalDiffusion(torch.nn.Module):
         # The network that will predict the denoising.
         self.dynamics = dynamics
 
-        self.in_node_nf = in_node_nf  # atom decoder \pm include_charge
+        self.in_node_nf = in_node_nf  # atom decoder \pm include_charge; 1 for toy experiments
         self.n_dims = n_dims
-        self.num_classes = self.in_node_nf - self.include_charges  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F'] where does charges go
+        self.num_classes = self.in_node_nf - self.include_charges if self.molecule else 5  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F'] where does charges go
 
         self.T = timesteps
         self.parametrization = parametrization
@@ -343,7 +343,7 @@ class EnVariationalDiffusion(torch.nn.Module):
     def check_issues_norm_values(self, num_stdevs=8):  # need differences in discrete values to be large compared to \sigma_0
         zeros = torch.zeros((1, 1))
         gamma_0 = self.gamma(zeros)
-        sigma_0 = self.sigma(gamma_0, target_tensor=zeros).item()
+        sigma_0 = self.sigma(gamma_0, target_tensor=zeros).item()  # [1, 1]
 
         # Checked if 1 / norm_value is still larger than 10 * standard
         # deviation.
@@ -359,7 +359,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         if self.com_free:
             net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
         else:
-            net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context, gamma=self.gamma(t))
+            net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context, gamma_t=self.gamma(t))
         return net_out
 
     def inflate_batch_array(self, array, target):
@@ -467,7 +467,10 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         else:
             bs = len(gamma_t[0])
-            alpha_t_given_s = self.inflate_batch_array(torch.ones([bs], device=target_tensor.device), target_tensor)
+            alpha_t_given_s = self.inflate_batch_array(
+                torch.ones([bs], device=target_tensor.device), 
+                target_tensor
+            )
             sigma2_t_given_s = self.inflate_batch_array(
                 torch.exp(gamma_t[1]) - torch.exp(gamma_s[1]),
                 target_tensor
@@ -492,7 +495,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         mu_T_x, mu_T_h = mu_T[:, :, :self.n_dims], mu_T[:, :, self.n_dims:]
 
         # Compute standard deviations (only batch axis for x-part, inflated for h-part).
-        sigma_T_x = self.sigma(gamma_T, mu_T_x).squeeze()  # NOTE: Remove inflate, only keep batch dimension for x-part. - #[bs, 1]
+        sigma_T_x = self.sigma(gamma_T, mu_T_x).squeeze()  # NOTE: Remove inflate, only keep batch dimension for x-part. - # [bs, 1]
         sigma_T_h = self.sigma(gamma_T, mu_T_h)  # [bs, 1, 1]
 
         if self.com_free:
@@ -537,9 +540,18 @@ class EnVariationalDiffusion(torch.nn.Module):
 
     def compute_error(self, net_out, gamma_t, eps):
         """Computes error, i.e. the most likely prediction of x."""
-        eps_t = net_out
+
+        if self.molecule:
+            eps_t = net_out
+            in_node_nf = self.in_node_nf
+        else:
+            # computes error just for x 
+            eps_t = net_out[:, :, :self.n_dims]
+            in_node_nf = 0
+            eps = eps[:, :, :self.n_dims]
+
         if self.training and self.loss_type == 'l2':
-            denom = (self.n_dims + self.in_node_nf) * eps_t.shape[1]
+            denom = (self.n_dims + in_node_nf) * eps_t.shape[1]
             error = sum_except_batch((eps - eps_t) ** 2) / denom
         else:
             error = sum_except_batch((eps - eps_t) ** 2)  # [bs, n_nodes, dim] to [bs]
@@ -582,7 +594,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs]
         else:
             sigma_x = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
-        net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
+        net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims] - should also include h?
 
         # Compute mu for p(zs | zt).
         mu_x = self.compute_x_pred(net_out, z0, gamma_0)
@@ -667,10 +679,12 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Combine categorical and integer log-probabilities.
         log_p_h_given_z = log_ph_integer + log_ph_cat
 
-        # Combine log probabilities for x and h.
-        log_p_xh_given_z = log_p_x_given_z_without_constants + log_p_h_given_z
-
-        return log_p_xh_given_z
+        if self.molecule:
+            # Combine log probabilities for x and h.
+            log_p_xh_given_z = log_p_x_given_z_without_constants + log_p_h_given_z
+            return log_p_xh_given_z
+        else:
+            return log_p_x_given_z_without_constants
 
     def compute_loss(self, x, h, node_mask, edge_mask, context, t0_always):
         """Computes an estimator for the variational lower bound, or the simple loss (MSE)."""
@@ -818,6 +832,9 @@ class EnVariationalDiffusion(torch.nn.Module):
             loss, loss_dict = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=True)
 
         neg_log_pxh = loss
+
+        if not self.molecule:
+            delta_log_px = torch.zeros_like(delta_log_px)
 
         # Correct for normalization on x.
         assert neg_log_pxh.size() == delta_log_px.size()  # np scalar

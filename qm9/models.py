@@ -16,7 +16,7 @@ def get_model(args, device, dataset_info, dataloader_train):
         in_node_nf = len(dataset_info['atom_decoder']) + int(args.include_charges)  # 'atom_decoder': ['H', 'C', 'N', 'O', 'F']; \pm 1
         nodes_dist = DistributionNodes(histogram)  # will sample over all nodes
     else:
-        in_node_nf = 0
+        in_node_nf = 1
         nodes_dist = None
 
     prop_dist = None

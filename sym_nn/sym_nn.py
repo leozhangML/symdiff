@@ -35,21 +35,24 @@ class DiTGaussian_dynamics(nn.Module):
         super().__init__()
 
         self.args = args
+        self.molecule = args.molecule
+
         self.n_dims = n_dims
+        self.in_node_nf = in_node_nf if self.molecule else 0
 
         self.mlp_type = mlp_type
 
         self.gaussian_embedder = GaussianLayer(K=K)
 
         self.model = DiT(
-            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
+            out_channels=n_dims+self.in_node_nf+context_node_nf, x_scale=0.0, 
             hidden_size=hidden_size, depth=depth, 
             num_heads=num_heads, mlp_ratio=mlp_ratio, 
             use_fused_attn=True, x_emb="identity", mlp_dropout=mlp_dropout,
             mlp_type=mlp_type
             )
 
-        self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
+        self.xh_embedder = nn.Linear(n_dims+self.in_node_nf+context_node_nf, xh_hidden_size)
         self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
 
         def _basic_init(module):
@@ -66,6 +69,13 @@ class DiTGaussian_dynamics(nn.Module):
     def forward(self):
         raise NotImplementedError
 
+    def ve_scaling(self, gamma_t):
+        c_in = torch.sqrt(
+            self.args.sigma_data**2 +
+            torch.exp(gamma_t[1]).unsqueeze(-1)
+        )
+        return c_in
+
     def _forward(self, t, xh, node_mask, edge_mask, context):
         # t: [bs, 1]
         # xh: [bs, n_nodes, dims]
@@ -78,7 +88,14 @@ class DiTGaussian_dynamics(nn.Module):
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
         x = remove_mean_with_mask(x, node_mask)
-        xh = torch.cat([x.clone(), h], dim=-1)
+
+        bs, n_nodes, h_dims = h.shape
+
+        if self.molecule:
+            xh = torch.cat([x.clone(), h], dim=-1)
+        else:
+            xh = x.clone()
+
         xh = self.xh_embedder(xh)  # [bs, n_nodes, xh_hidden_size]
 
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
@@ -89,7 +106,7 @@ class DiTGaussian_dynamics(nn.Module):
         xh = node_mask * self.model(xh, t.squeeze(-1), node_mask.squeeze(-1))
 
         x = xh[:, :, :self.n_dims] 
-        h = xh[:, :, self.n_dims:]
+        h = xh[:, :, self.n_dims:] if self.molecule else torch.zeros(bs, n_nodes, h_dims, device=h.device)
 
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
@@ -149,12 +166,15 @@ class DiT_DitGaussian_dynamics(nn.Module):
         super().__init__()
 
         self.args = args
+        self.molecule = args.molecule
+
         self.n_dims = n_dims
+        self.in_node_nf = in_node_nf if self.molecule else 0
 
         self.gaussian_embedder = GaussianLayer(K=K)
         self.gaussian_embedder_test = GaussianLayer(K=K)
 
-        self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
+        self.xh_embedder = nn.Linear(n_dims+self.in_node_nf+context_node_nf, xh_hidden_size)
         self.pos_embedder = nn.Linear(K, hidden_size-xh_hidden_size)
 
         self.pos_embedder_test = nn.Linear(K, pos_embedder_test)
@@ -165,7 +185,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.enc_concat_h = enc_concat_h  # NOTE: not used for now
 
         if enc_concat_h:
-            self.gamma_enc_input_dim = n_dims + in_node_nf + hidden_size-xh_hidden_size + noise_dims
+            self.gamma_enc_input_dim = n_dims + self.in_node_nf + hidden_size-xh_hidden_size + noise_dims
         else:
             self.gamma_enc_input_dim = n_dims + pos_embedder_test + noise_dims
 
@@ -179,14 +199,14 @@ class DiT_DitGaussian_dynamics(nn.Module):
             mlp_type=mlp_type
         ).to(device)
 
-        # add t emb here
+        # add t emb here?
         self.gamma_dec = Mlp(
             in_features=enc_hidden_size, hidden_features=dec_hidden_features,
             out_features=n_dims**2
         ).to(device)
 
-        self.model = DiT(
-            out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
+        self.backbone = DiT(
+            out_channels=n_dims+self.in_node_nf+context_node_nf, x_scale=0.0, 
             hidden_size=hidden_size, depth=depth, 
             num_heads=num_heads, mlp_ratio=mlp_ratio, 
             use_fused_attn=True, x_emb="identity", mlp_dropout=mlp_dropout,
@@ -252,13 +272,30 @@ class DiT_DitGaussian_dynamics(nn.Module):
         pos_emb = self.gaussian_embedder(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
         pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
 
-        xh = self.xh_embedder(torch.cat([x, h], dim=-1))
-        xh = node_mask * torch.cat([xh, pos_emb], dim=-1)
-        xh = node_mask * self.backbone(xh, t.squeeze(-1), node_mask.squeeze(-1))
+        if self.molecule:
+            xh = self.xh_embedder(torch.cat([x, h], dim=-1))
+            xh = node_mask * torch.cat([xh, pos_emb], dim=-1)
+            xh = node_mask * self.backbone(xh, t.squeeze(-1), node_mask.squeeze(-1))
+        else:
+            bs, n_nodes, h_dims = h.shape
+            x_ = self.xh_embedder(x)
+            x_ = node_mask * torch.cat([x_, pos_emb], dim=-1)
+            xh = node_mask * torch.cat(
+                [self.backbone(x_, t.squeeze(-1), node_mask.squeeze(-1)),
+                 torch.zeros(bs, n_nodes, h_dims, device=h.device)],
+                 dim=-1
+            )
 
         return xh
+    
+    def ve_scaling(self, gamma_t):
+        c_in = torch.sqrt(
+            self.args.sigma_data**2 +
+            torch.exp(gamma_t[1]).unsqueeze(-1)
+        )
+        return c_in
 
-    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma_t=None): 
         # t: [bs, 1]
         # xh: [bs, n_nodes, dims]
         # node_mask: [bs, n_nodes, 1]
@@ -266,7 +303,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # return [bs, n_nodes, dims]
 
         assert context is None
-        assert gamma is None
+        #assert gamma_t is None
 
         bs, n_nodes, _ = xh.shape
 
@@ -276,12 +313,11 @@ class DiT_DitGaussian_dynamics(nn.Module):
         x = remove_mean_with_mask(x, node_mask)
 
         if not self.args.com_free:
-            assert gamma is not None
+            assert gamma_t is not None
             # Karras et al. (2022) scaling
-            x = x / torch.sqrt(
-                self.args.sigma_data**2 + 
-                torch.exp(gamma[1]).unsqueeze(-1)
-                )
+            c_in = self.ve_scaling(gamma_t)
+            x = x / c_in
+            h = h / c_in
 
         gamma = self.gamma(t, x, node_mask)
 

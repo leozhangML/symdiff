@@ -119,8 +119,8 @@ parser.add_argument('--n_stability_samples', type=int, default=500,
 parser.add_argument('--normalize_factors', type=eval, default=[1, 4, 1],
                     help='normalize factors for [x, categorical, integer]')
 parser.add_argument('--remove_h', action='store_true')
-parser.add_argument('--include_charges', type=eval, default=True,
-                    help='include atom charge or not')
+parser.add_argument('--include_charges', type=eval, default=False,
+                    help='include atom charge or not')  # changed from True
 parser.add_argument('--visualize_every_batch', type=int, default=1e8,
                     help="Can be used to visualize multiple times per epoch")
 parser.add_argument('--normalization_factor', type=float, default=1,
@@ -128,9 +128,19 @@ parser.add_argument('--normalization_factor', type=float, default=1,
 parser.add_argument('--aggregation_method', type=str, default='sum',
                     help='"sum" or "mean"')
 
-# -------- distribution args -------- #
+# -------- retrieve_dataloaders args -------- #
 
+parser.add_argument("--toy_datasets_path", type=str, default="", help="where to save the toy datasets")
+parser.add_argument("--resample_toy_data", action="store_true", help="whether to resample the toy datasets")
+parser.add_argument("--toy_train_n", type=int, default=1000, help="toy datasets config")
+parser.add_argument("--toy_train_rotate", action="store_true", help="toy datasets config")
+parser.add_argument("--toy_val_n", type=int, default=1000, help="toy datasets config")
+parser.add_argument("--toy_test_n", type=int, default=500, help="toy datasets config")
 
+# -------- TestDistributions args -------- #
+
+parser.add_argument("--min_radius", type=float, default=0.5, help="TestDistribution config")
+parser.add_argument("--max_radius", type=float, default=0.8, help="TestDistribution config")
 
 # -------- sym_diff args -------- #
 
@@ -152,7 +162,7 @@ parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT
 
 parser.add_argument("--x_emb", type=str, default="fourier", help="config for DiT")
 
-# -------- DiT_GNN and DiT_DiT args -------- #
+# -------- DiT_DiT args -------- #
 
 parser.add_argument("--enc_x_scale", type=float, default=25.0, help="config for DiT_GNN")
 parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_GNN")
@@ -174,6 +184,7 @@ parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for D
 # -------- DiTGaussian args -------- #
 
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
+parser.add_argument("--pos_embedder_test", type=int, default=32, help="config for DiTEmb")
 parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
 
 # -------- Deepsets DiTGaussian args -------- #
@@ -188,8 +199,11 @@ parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config 
 
 
 args = parser.parse_args()
+
+# args to ensure compatibility
 args.molecule = False
 args.n_dims = 2
+args.context_node_nf = 0
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -265,7 +279,7 @@ def main():
             scheduler.load_state_dict(scheduler_state_dict)
 
     # Initialize dataparallel if enabled and possible.
-    if args.dp and torch.cuda.device_count() > 1:
+    if args.dp and torch.cuda.device_count() > 1 and False:  # remove for now
         print(f'Training using {torch.cuda.device_count()} GPUs')
         model_dp = torch.nn.DataParallel(model.cpu())
         model_dp = model_dp.cuda()
@@ -281,7 +295,7 @@ def main():
             ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
             model_ema.load_state_dict(ema_state_dict)
 
-        if args.dp and torch.cuda.device_count() > 1:
+        if args.dp and torch.cuda.device_count() > 1 and False:
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
             model_ema_dp = model_ema
