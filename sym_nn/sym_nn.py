@@ -2050,7 +2050,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
             # add t emb here
             self.gamma_dec = Mlp(
                 in_features=enc_hidden_size, hidden_features=dec_hidden_features,
-                out_features=n_dims**2, drop=dropout_gamma_dec
+                out_features=n_dims**2
             ).to(device)
 
             self.k = DiT(
