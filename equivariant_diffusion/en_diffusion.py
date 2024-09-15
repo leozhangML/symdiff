@@ -5,7 +5,7 @@ import torch
 from egnn import models
 from torch.nn import functional as F
 from equivariant_diffusion import utils as diffusion_utils
-import utils
+import utils as data_aug_utils
 
 
 
@@ -582,7 +582,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         
         if self.data_aug_at_sampling:            
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
-            net_out = utils.random_rotation(net_out).detach()
+            net_out = data_aug_utils.random_rotation(net_out).detach()
         else:
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
@@ -841,7 +841,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Neural net prediction.
         if self.data_aug_at_sampling:            
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
-            eps_t = utils.random_rotation(eps_t).detach()
+            eps_t = data_aug_utils.random_rotation(eps_t).detach()
         else:
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
 
