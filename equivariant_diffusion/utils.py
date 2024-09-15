@@ -3,7 +3,7 @@ import numpy as np
 
 
 class EMA():
-    def __init__(self, beta, gamma_beta, k_beta, use_separate_emas=False):
+    def __init__(self, beta, gamma_beta=0, k_beta=0, use_separate_emas=False):
         super().__init__()
         self.beta = beta
         self.gamma_beta = gamma_beta
