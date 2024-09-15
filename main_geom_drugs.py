@@ -100,16 +100,37 @@ parser.add_argument('--diffusion_noise_precision', type=float, default=1e-5)
 
 
 # Positional embeddings
-parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma", default=False)
+# Positional embeddings
+parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+parser.add_argument("--gamma_K", type=float, default=0, help="K for gamma positional embeddings")
+parser.add_argument("--k_K", type=float, default=0, help="K for k positional embeddings")
+parser.add_argument("--pos_emb_gamma_projection_dim", type=float, default=0, help="Dimension of the projection for gamma positional embeddings")
+
 
 # Use separate optimizers for K and Gamma
 parser.add_argument("--use_separate_optimisers", action="store_true", help="Whether to use two separate optimizers for the K and Gamma", default=False)
 
+parser.add_argument('--lr_K', type=float, default=2e-4)
+parser.add_argument('--use_amsgrad_K', action="store_true")  # default from EDM
+parser.add_argument('--weight_decay_K', type=float, default=1e-12)  # default from EDM
+
+parser.add_argument('--lr_gamma', type=float, default=2e-4)
+parser.add_argument('--use_amsgrad_gamma', action="store_true")  # default from EDM
+parser.add_argument('--weight_decay_gamma', type=float, default=1e-12)  # default from EDM
+
+
 # Use separate ema
 parser.add_argument('--use_separate_ema', action="store_true", help='Use separate ema for the gamma and k', default=False)
-parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k", default=False)
+parser.add_argument('--ema_decay_K', type=float, default=0.999,
+                    help='Amount of EMA decay, 0 means off. A reasonable value'
+                         ' is 0.999.')
+parser.add_argument('--ema_decay_gamma', type=float, default=0.999,
+                    help='Amount of EMA decay, 0 means off. A reasonable value'
+                         ' is 0.999.')
+
 
 # Seprate arguments for dropout        
+parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
 parser.add_argument("--dropout_gamma_enc", type=float, default=0.0, help="Dropout for gamma encoder")
 parser.add_argument("--dropout_gamma_dec", type=float, default=0.0, help="Dropout for gamma decoder")
 parser.add_argument("--dropout_k", type=float, default=0.0, help="Dropout for k")
@@ -136,6 +157,12 @@ parser.add_argument('--clip_grad', type=eval, default=True,
                     help='True | False')
 parser.add_argument('--trace', type=str, default='hutch',
                     help='hutch | exact')
+
+
+### Model parts to freeze for DIT DIT model  ####
+parser.add_argument("--freeze_model_parts", action="store_true", help="Whether to freeze the model parts")
+parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
+
 
 ################## EGNN args ##################
 parser.add_argument('--n_layers', type=int, default=6,
