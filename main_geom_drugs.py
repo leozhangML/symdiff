@@ -230,6 +230,8 @@ parser.add_argument('--sequential', action='store_true',
 args = parser.parse_args()
 
 
+parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
+
 ##########################################################################################################################
 
 
