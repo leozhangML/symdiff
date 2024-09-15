@@ -582,7 +582,10 @@ class EnVariationalDiffusion(torch.nn.Module):
         
         if self.data_aug_at_sampling:            
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
-            net_out = data_aug_utils.random_rotation(net_out).detach()
+            net_out_x = net_out[:, :, :3]
+            net_out_h = net_out[:, :, 3:]
+            net_out_x = data_aug_utils.random_rotation(net_out_x).detach()
+            net_out = torch.cat([net_out_x, net_out_h], dim=2)
         else:
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
@@ -841,7 +844,10 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Neural net prediction.
         if self.data_aug_at_sampling:            
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
-            eps_t = data_aug_utils.random_rotation(eps_t).detach()
+            eps_t_x = eps_t[:, :, :3]
+            eps_t_h = eps_t[:, :, 3:]
+            eps_t_x = data_aug_utils.random_rotation(eps_t_x).detach()
+            eps_t = torch.cat([eps_t_x, eps_t_h], dim=2)
         else:
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
 
