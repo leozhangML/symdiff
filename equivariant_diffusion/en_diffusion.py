@@ -5,6 +5,8 @@ import torch
 from egnn import models
 from torch.nn import functional as F
 from equivariant_diffusion import utils as diffusion_utils
+import utils
+
 
 
 # Defining some useful util functions.
@@ -294,8 +296,9 @@ class EnVariationalDiffusion(torch.nn.Module):
             timesteps: int = 1000, parametrization='eps', noise_schedule='learned',
             noise_precision=1e-4, loss_type='vlb', norm_values=(1., 1., 1.),
             norm_biases=(None, 0., 0.), include_charges=True, 
-            com_free=True, rho=None, sigma_min=None, sigma_max=None):
+            com_free=True, rho=None, sigma_min=None, sigma_max=None, data_aug_at_sampling=False):
         super().__init__()  
+        self.data_aug_at_sampling = data_aug_at_sampling
  
         # norm_values=normalize_factors [1, 4, 1], norm_biases is default - how to scale xh, vlb is default
 
@@ -576,7 +579,12 @@ class EnVariationalDiffusion(torch.nn.Module):
             sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs]
         else:
             sigma_x = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
-        net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
+        
+        if self.data_aug_at_sampling:            
+            net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
+            net_out = utils.random_rotation(net_out).detach()
+        else:
+            net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
         # Compute mu for p(zs | zt).
         mu_x = self.compute_x_pred(net_out, z0, gamma_0)
@@ -831,7 +839,11 @@ class EnVariationalDiffusion(torch.nn.Module):
         sigma_t = self.sigma(gamma_t, target_tensor=zt)
 
         # Neural net prediction.
-        eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+        if self.data_aug_at_sampling:            
+            eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+            eps_t = utils.random_rotation(eps_t).detach()
+        else:
+            eps_t = self.phi(zt, t, node_mask, edge_mask, context)
 
         # Compute mu for p(zs | zt).
         if self.com_free:

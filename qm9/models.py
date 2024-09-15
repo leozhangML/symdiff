@@ -606,7 +606,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             com_free=args.com_free,
             rho=args.rho,
             sigma_min=args.sigma_min,
-            sigma_max=args.sigma_max
+            sigma_max=args.sigma_max,
+            data_aug_at_sampling=args.data_aug_at_sampling,
             )
 
         if args.freeze_model_parts:
