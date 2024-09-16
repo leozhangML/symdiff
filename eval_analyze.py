@@ -124,6 +124,8 @@ def main():
                         help='Should save samples to xyz files.')
     parser.add_argument("--datadir", type=str, default=None, 
                         help="Use if trained on a different node")
+    parser.add_argument('--data_aug_at_sampling', type=eval, default=False,
+                        help='Whether we should apply data augmentation for sampling')                        
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -159,6 +161,9 @@ def main():
 
     # Load model
     generative_model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
+    data_aug_at_sampling = eval_args.data_aug_at_sampling
+    if data_aug_at_sampling:
+        generative_model.data_aug_at_sampling = True
     if prop_dist is not None:
         property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)
         prop_dist.set_normalizer(property_norms)

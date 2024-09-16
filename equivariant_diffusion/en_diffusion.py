@@ -581,6 +581,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             sigma_x = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
         
         if self.data_aug_at_sampling:            
+            print("Applying data augmentation at sampling time")
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
             net_out_x = net_out[:, :, :3]
             net_out_h = net_out[:, :, 3:]
@@ -843,6 +844,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Neural net prediction.
         if self.data_aug_at_sampling:            
+            print("Applying data augmentation at sampling time")
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
