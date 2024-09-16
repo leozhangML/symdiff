@@ -321,6 +321,10 @@ parser.add_argument("--freeze_model_parts", action="store_true", help="Whether t
 parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
 
 
+# Data aug at sampling
+parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
+
+
 # Getting the dataset
 args = parser.parse_args()
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
