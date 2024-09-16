@@ -103,7 +103,7 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             return x.contiguous()
 
         else:
-            return R        
+            return [R]        
 
 
     elif n_dims == 3:
@@ -161,7 +161,7 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             return x.contiguous()
 
         else:
-            return Rx, Ry, Rz
+            return [Rx, Ry, Rz]
 
 
     else:
