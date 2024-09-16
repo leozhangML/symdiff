@@ -95,7 +95,9 @@ def get_model(args, device, dataset_info, dataloader_train):
             enc_depth=args.enc_depth,
             enc_num_heads=args.enc_num_heads,
             enc_mlp_ratio=args.enc_mlp_ratio,
+
             dec_hidden_features=args.dec_hidden_features,
+            gamma_mlp_dropout=args.gamma_mlp_dropout,
 
             hidden_size=args.hidden_size,
             depth=args.depth,

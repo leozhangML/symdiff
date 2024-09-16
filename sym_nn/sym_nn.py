@@ -146,6 +146,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         enc_mlp_ratio: float,
 
         dec_hidden_features: int,
+        gamma_mlp_dropout: float, 
 
         hidden_size: int,
         depth: int,
@@ -194,6 +195,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
             out_channels=0, x_scale=0.0, 
             hidden_size=enc_hidden_size, depth=enc_depth, 
             num_heads=enc_num_heads, mlp_ratio=enc_mlp_ratio, 
+            mlp_dropout=gamma_mlp_dropout,
             use_fused_attn=True, x_emb="linear", 
             input_dim=self.gamma_enc_input_dim,
             mlp_type=mlp_type
@@ -202,7 +204,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # add t emb here?
         self.gamma_dec = Mlp(
             in_features=enc_hidden_size, hidden_features=dec_hidden_features,
-            out_features=n_dims**2
+            out_features=n_dims**2, drop=0.0
         ).to(device)
 
         self.backbone = DiT(
@@ -295,7 +297,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         )
         return c_in
 
-    def _forward(self, t, xh, node_mask, edge_mask, context, gamma_t=None): 
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma_t=None, return_gamma=False): 
         # t: [bs, 1]
         # xh: [bs, n_nodes, dims]
         # node_mask: [bs, n_nodes, 1]
@@ -334,8 +336,11 @@ class DiT_DitGaussian_dynamics(nn.Module):
         xh = torch.cat([x, h], dim=-1)
 
         assert_correctly_masked(xh, node_mask)
-
-        return xh
+        
+        if return_gamma:
+            return xh, gamma
+        else:
+            return xh
 
     def print_parameter_count(self):
 

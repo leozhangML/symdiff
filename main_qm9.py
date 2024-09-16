@@ -158,22 +158,22 @@ parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
 parser.add_argument("--mlp_ratio", type=float, default=2.0, help="config for DiT")
 parser.add_argument("--mlp_dropout", type=float, default=0.0, help="config for DiTEmb")
 
-
 # -------- DiT_DiTGaussian args -------- #
 
-parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_GNN")
-parser.add_argument("--enc_depth", type=int, default=4, help="config for DiT_GNN")
-parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT_GNN")
-parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_GNN")
+parser.add_argument("--enc_hidden_size", type=int, default=64, help="config for DiT_DiTGaussian")
+parser.add_argument("--enc_depth", type=int, default=4, help="config for DiT_DiTGaussian")
+parser.add_argument("--enc_num_heads", type=int, default=4, help="config for DiT_DiTGaussian")
+parser.add_argument("--enc_mlp_ratio", type=float, default=4, help="config for DiT_DiTGaussian")
 
-parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_GNN")
+parser.add_argument("--dec_hidden_features", type=int, default=32, help="config for DiT_DiTGaussian")
+parser.add_argument("--gamma_mlp_dropout", type=float, default=0.0, help="config for DiT_DiTGaussian")
 
-parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_GNN")
+parser.add_argument("--enc_concat_h", action="store_true", help="config for DiT_DiTGaussian")
 
-parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_GNN")
-parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_GNN")
+parser.add_argument("--noise_dims", type=int, default=16, help="config for DiT_DiTGaussian")
+parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT_DiTGaussian")
 
-parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiTGaussian")
+parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiT_DiTGaussian")
 
 # -------- Deepsets DiTGaussian args -------- #
 

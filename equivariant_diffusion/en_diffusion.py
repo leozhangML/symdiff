@@ -608,7 +608,12 @@ class EnVariationalDiffusion(torch.nn.Module):
         h_int = z0[:, :, -1:] if self.include_charges else torch.zeros(0).to(z0.device)
         x, h_cat, h_int = self.unnormalize(x, z0[:, :, self.n_dims:-1], h_int, node_mask)  # back to original scale
 
-        h_cat = F.one_hot(torch.argmax(h_cat, dim=2), self.num_classes) * node_mask  # why node_mask? [bs, n_nodes, num_classes] of ints
+        if self.molecule:
+            h_cat = F.one_hot(torch.argmax(h_cat, dim=2), self.num_classes) * node_mask  # why node_mask? [bs, n_nodes, num_classes] of ints
+        else:
+            bs, n_nodes, _ = x.shape
+            h_cat = torch.zeros(bs, n_nodes, self.in_node_nf, device=x.device)
+
         h_int = torch.round(h_int).long() * node_mask  # [bs, n_nodes, 1]
         h = {'integer': h_int, 'categorical': h_cat}
         return x, h

@@ -5,8 +5,8 @@ from sym_nn.distributions import TestDistribution
 
 class Args:
     def __init__(self):
-        self.min_radius = 1-1e-4
-        self.max_radius = 1+1e-4
+        self.min_radius = 0.6
+        self.max_radius = 0.8
 
 args = Args()
 
