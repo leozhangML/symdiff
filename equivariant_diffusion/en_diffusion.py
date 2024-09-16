@@ -877,14 +877,10 @@ class EnVariationalDiffusion(torch.nn.Module):
 
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
-            test = data_aug_utils.random_rotation(eps_t_x)
-            asdsadsa
-            print("Shape of eps_t_x: ", eps_t_x.shape)
             # Print shape of matrices
-            for matrix in matrices:
+            for matrix in inverse_matrices:
                 print("Shape of matrix: ", matrix.shape)
-
-
+            print("Shape of eps_t_x: ", eps_t_x.shape)
             eps_t_x = data_aug_utils.random_rotation(eps_t_x, use_matrices=inverse_matrices).detach()
             eps_t = torch.cat([eps_t_x, eps_t_h], dim=2)
         else:
@@ -895,7 +891,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             diffusion_utils.assert_mean_zero_with_mask(zt[:, :, :self.n_dims], node_mask)
             diffusion_utils.assert_mean_zero_with_mask(eps_t[:, :, :self.n_dims], node_mask)
 
-        mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t
+        mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t    # CHANGE HERE AS THIS SHOULD BE THE OLD ZT
 
         # Compute sigma for p(zs | zt).
         sigma = sigma_t_given_s * sigma_s / sigma_t
