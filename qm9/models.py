@@ -592,6 +592,10 @@ def get_model(args, device, dataset_info, dataloader_train):
         if args.com_free is False:
             print("Not using CoM-free systems!")
 
+        # Check if data_aug_at_sampling is in args
+        if "data_aug_at_sampling" not in args.__dict__:
+            args.data_aug_at_sampling = False
+
         vdm = EnVariationalDiffusion(
             dynamics=net_dynamics,
             in_node_nf=in_node_nf,
