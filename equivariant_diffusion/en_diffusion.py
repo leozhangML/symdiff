@@ -599,6 +599,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             inverse_matrices = []
             for matrix in matrices:
                 inverse_matrices.append(matrix.transpose(1, 2))
+            inverse_matrices = inverse_matrices[::-1]  # reverse the order
             
             net_out_x = net_out[:, :, :3]
             net_out_h = net_out[:, :, 3:]
@@ -877,6 +878,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             inverse_matrices = []
             for matrix in matrices:
                 inverse_matrices.append(matrix.transpose(1, 2))
+            inverse_matrices = inverse_matrices[::-1]  # reverse the order
 
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]

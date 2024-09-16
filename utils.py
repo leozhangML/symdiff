@@ -146,7 +146,7 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             print("Shape of Ry: ", Ry.shape)
             print("Shape of Rz: ", Rz.shape)
 
-
+            # Do Rz * Ry * Rx * x (for inverse this is Rx.T * Ry.T * Rz.T * x)
             x = x.transpose(1, 2)
             x = torch.matmul(Rx, x)
             #x = torch.matmul(Rx.transpose(1, 2), x)
