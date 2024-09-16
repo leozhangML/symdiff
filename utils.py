@@ -94,6 +94,8 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             R = use_matrices[0]
 
         if not output_matrix:
+            print("Shape of x: ", x.shape)
+            print("Shape of R: ", R.shape)
             x = x.transpose(1, 2)
             x = torch.matmul(R, x)
             x = x.transpose(1, 2)
@@ -139,6 +141,12 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             Rx, Ry, Rz = use_matrices
 
         if not output_matrix:
+            print("Shape of x: ", x.shape)
+            print("Shape of Rx: ", Rx.shape)
+            print("Shape of Ry: ", Ry.shape)
+            print("Shape of Rz: ", Rz.shape)
+
+
             x = x.transpose(1, 2)
             x = torch.matmul(Rx, x)
             #x = torch.matmul(Rx.transpose(1, 2), x)

@@ -858,7 +858,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         sigma_t = self.sigma(gamma_t, target_tensor=zt)
 
         # Neural net prediction.
-        if self.data_aug_at_sampling:            
+        if self.data_aug_at_sampling:
             print("Applying data augmentation at sampling time")
             zt_x = zt[:, :, :3]
             zt_h = zt[:, :, 3:]
@@ -877,6 +877,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
+            test = data_aug_utils.random_rotation(eps_t_x)
+            asdsadsa
             print("Shape of eps_t_x: ", eps_t_x.shape)
             # Print shape of matrices
             for matrix in matrices:
