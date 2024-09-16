@@ -3,7 +3,10 @@ import os
 import pickle
 
 import torch
+import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
 
 from qm9.models import get_model
 from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask,\
@@ -14,10 +17,9 @@ from sym_nn.utils import orthogonal_haar
 
 
 def plot_positions(positions, project=False, plot_single=False, title=None):
-    # positions: [n, 2, 2]
-
+    # positions: [n, 2, 2] (np.array)
     if project:
-        radii = torch.norm(positions, dim=-1)[:, 0]  # [n]
+        radii = np.linalg.norm(positions, axis=-1)[:, 0]  # [n]
         _ = plt.hist(radii, bins=100)
     else:
         plt.scatter(positions[:, 0, 0], positions[:, 0, 1], alpha=0.5)
@@ -28,13 +30,24 @@ def plot_positions(positions, project=False, plot_single=False, title=None):
     plt.show()
 
 
-def sample(eval_args, generative_model, fix_noise=False):
+def plot_radius(positions):
+    radius_0 = np.linalg.norm(positions[:, 0], axis=-1)  # [n]
+    radius_1 = np.linalg.norm(positions[:, 1], axis=-1)  # [n]
+    radius_diff = np.sqrt((radius_0 - radius_1)**2)
+    _ = plt.hist(radius_diff, bins=100)
+    plt.show()
+
+
+def sample(eval_args, generative_model, fix_noise=False, return_np=False):
 
     node_mask = torch.ones(eval_args.n_samples, 2, 1, 
                            device=generative_model.dynamics.device)
     x, _ = generative_model.sample(eval_args.n_samples, 2, node_mask, 
                                    None, None, fix_noise=fix_noise)
-    x = x.cpu().detach().numpy()  # [n_samples, 2, 2]
+    if return_np:
+        x = x.cpu().detach().numpy()  # [n_samples, 2, 2]
+
+    return x
 
 
 def sample_chain(eval_args, generative_model):
@@ -171,6 +184,7 @@ def convert_x_to_xh(x):
     h = torch.zeros(len(x), 2, 1, device=x.device)
     return torch.cat([x, h], dim=-1)
 
+
 def main():
     
     parser = argparse.ArgumentParser(description='eval_toy_experiment')
@@ -207,10 +221,12 @@ def main():
     #plot_positions(train_positions, project=True, plot_single=False)
 
     # visualise p_t
-    visualise_p_t(args, iter_train_dataloader, generative_model)
+    #visualise_p_t(args, iter_train_dataloader, generative_model)
 
     # visualise samples
-    #visualise_samples(eval_args, generative_model, fix_noise=False)
+    samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
+    plot_positions(samples, project=False, plot_single=False, title="samples")
+    plot_radius(samples)
 
     # visualise chain
     #chain = sample_chain(eval_args, generative_model)
@@ -220,6 +236,8 @@ def main():
     # plot samples from gamma
     #xh = next(iter(dataloaders["train"]))["positions"][[0]].to(args.device)  # already shuffled
     #t = torch.rand(1, device=args.device)
+
+    # check this
     xh = generative_model.sample_combined_position_feature_noise(
         1, 2, torch.ones(1, 2, 1, device=device), com_free=True
     )
