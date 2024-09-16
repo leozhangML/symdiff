@@ -6,6 +6,7 @@ from egnn import models
 from torch.nn import functional as F
 from equivariant_diffusion import utils as diffusion_utils
 import utils as data_aug_utils
+from copy import copy, deepcopy
 
 
 
@@ -583,20 +584,21 @@ class EnVariationalDiffusion(torch.nn.Module):
         if self.data_aug_at_sampling:            
             print("Applying data augmentation at sampling time")
             # Get the matrix or matrices to use for augmentation def random_rotation(x, output_matrix=False, use_matrices=None):
-            z0_x = z0[:, :, :3]
-            z0_h = z0[:, :, 3:]
+            temp_z0 = deepcopy(z0)
+            z0_x = temp_z0[:, :, :3]
+            z0_h = temp_z0[:, :, 3:]
             matrices = data_aug_utils.random_rotation(z0_x, output_matrix=True)
 
             # Apply the rotation
             z0_x = data_aug_utils.random_rotation(z0_x, use_matrices=matrices)
-            z0 = torch.cat([z0_x, z0_h], dim=2)
-            net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
+            temp_z0 = torch.cat([z0_x, z0_h], dim=2)
+            net_out = self.phi(temp_z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
             # Apply the inverse rotation (orthogonal matrix) to the output
             # Get inverse by transposing
             inverse_matrices = []
             for matrix in matrices:
-                inverse_matrices.append(matrix.T)
+                inverse_matrices.append(matrix.transpose(1, 2))
             
             net_out_x = net_out[:, :, :3]
             net_out_h = net_out[:, :, 3:]
@@ -860,14 +862,15 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Neural net prediction.
         if self.data_aug_at_sampling:
             print("Applying data augmentation at sampling time")
-            zt_x = zt[:, :, :3]
-            zt_h = zt[:, :, 3:]
+            temp_zt = deepcopy(zt)
+            zt_x = temp_zt[:, :, :3]
+            zt_h = temp_zt[:, :, 3:]
             matrices = data_aug_utils.random_rotation(zt_x, output_matrix=True)
 
             # Apply the rotation
             zt_x = data_aug_utils.random_rotation(zt_x, use_matrices=matrices)
-            zt = torch.cat([zt_x, zt_h], dim=2)
-            eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+            temp_zt = torch.cat([zt_x, zt_h], dim=2)
+            eps_t = self.phi(temp_zt, t, node_mask, edge_mask, context)
 
             # Apply the inverse rotation (orthogonal matrix) to the output
             # Get inverse by transposing
@@ -875,14 +878,8 @@ class EnVariationalDiffusion(torch.nn.Module):
             for matrix in matrices:
                 inverse_matrices.append(matrix.transpose(1, 2))
 
-
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
-
-            # Print shape of matrices
-            for matrix in inverse_matrices:
-                print("Shape of matrix: ", matrix.shape)
-            print("Shape of eps_t_x: ", eps_t_x.shape)
             eps_t_x = data_aug_utils.random_rotation(eps_t_x, use_matrices=inverse_matrices).detach()
             eps_t = torch.cat([eps_t_x, eps_t_h], dim=2)
         else:
@@ -893,7 +890,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             diffusion_utils.assert_mean_zero_with_mask(zt[:, :, :self.n_dims], node_mask)
             diffusion_utils.assert_mean_zero_with_mask(eps_t[:, :, :self.n_dims], node_mask)
 
-        mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t    # CHANGE HERE AS THIS SHOULD BE THE OLD ZT
+        mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t
 
         # Compute sigma for p(zs | zt).
         sigma = sigma_t_given_s * sigma_s / sigma_t
