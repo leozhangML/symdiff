@@ -582,10 +582,25 @@ class EnVariationalDiffusion(torch.nn.Module):
         
         if self.data_aug_at_sampling:            
             print("Applying data augmentation at sampling time")
+            # Get the matrix or matrices to use for augmentation def random_rotation(x, output_matrix=False, use_matrices=None):
+            z0_x = z0[:, :, :3]
+            z0_h = z0[:, :, 3:]
+            matrices = data_aug_utils.random_rotation(z0_x, output_matrix=True)
+
+            # Apply the rotation
+            z0_x = data_aug_utils.random_rotation(z0_x, use_matrices=matrices)
+            z0 = torch.cat([z0_x, z0_h], dim=2)
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
+
+            # Apply the inverse rotation (orthogonal matrix) to the output
+            # Get inverse by transposing
+            inverse_matrices = []
+            for matrix in matrices:
+                inverse_matrices.append(matrix.T)
+            
             net_out_x = net_out[:, :, :3]
             net_out_h = net_out[:, :, 3:]
-            net_out_x = data_aug_utils.random_rotation(net_out_x).detach()
+            net_out_x = data_aug_utils.random_rotation(net_out_x, use_matrices=inverse_matrices).detach()
             net_out = torch.cat([net_out_x, net_out_h], dim=2)
         else:
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
@@ -845,10 +860,24 @@ class EnVariationalDiffusion(torch.nn.Module):
         # Neural net prediction.
         if self.data_aug_at_sampling:            
             print("Applying data augmentation at sampling time")
+            zt_x = zt[:, :, :3]
+            zt_h = zt[:, :, 3:]
+            matrices = data_aug_utils.random_rotation(zt_x, output_matrix=True)
+
+            # Apply the rotation
+            zt_x = data_aug_utils.random_rotation(zt_x, use_matrices=matrices)
+            zt = torch.cat([zt_x, zt_h], dim=2)
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+
+            # Apply the inverse rotation (orthogonal matrix) to the output
+            # Get inverse by transposing
+            inverse_matrices = []
+            for matrix in matrices:
+                inverse_matrices.append(matrix.T)
+
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
-            eps_t_x = data_aug_utils.random_rotation(eps_t_x).detach()
+            eps_t_x = data_aug_utils.random_rotation(eps_t_x, use_matrices=inverse_matrices).detach()
             eps_t = torch.cat([eps_t_x, eps_t_h], dim=2)
         else:
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
