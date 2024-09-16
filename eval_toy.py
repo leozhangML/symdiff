@@ -4,16 +4,18 @@ import pickle
 
 import torch
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.use('TkAgg')
+
 
 from qm9.models import get_model
-from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask,\
-                                        assert_correctly_masked
+from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask, assert_correctly_masked
 
 from sym_nn.distributions import retrieve_dataloaders
 from sym_nn.utils import orthogonal_haar
+
+
+def save_plot(path="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots"):
+    pass
 
 
 def plot_positions(positions, project=False, plot_single=False, title=None):
@@ -98,6 +100,7 @@ def sample_outputs(args, xh, t, generative_model, n=5, plot=True):
 
 
 def check_stoc_equivariance(args, xh, t, iter_dataloader, generative_model, n=100):
+
     xh = sample_xh_batch_dataloader(args, iter_dataloader)[[0]]  # [1, 2, 3]
     noised_x = add_noise_x(args, xh, generative_model)
 
@@ -110,7 +113,6 @@ def check_stoc_equivariance(args, xh, t, iter_dataloader, generative_model, n=10
 
     f_g_inv_x, _ = sample_outputs(args, g_inv_xh, t, generative_model, n=n, plot=False)
     sym_f_x = torch.bmm(f_g_inv_x, g.transpose(1, 2))
-
 
     g_x = torch.bmm()  # finish
 
@@ -223,10 +225,14 @@ def main():
     # visualise p_t
     #visualise_p_t(args, iter_train_dataloader, generative_model)
 
+    _ = plt.hist(np.ones([10]), bins=100)
+    plt.show()
+    plt.close()
+
     # visualise samples
-    samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
-    plot_positions(samples, project=False, plot_single=False, title="samples")
-    plot_radius(samples)
+    #samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
+    #plot_positions(samples, project=False, plot_single=False, title="samples")
+    #plot_radius(samples)
 
     # visualise chain
     #chain = sample_chain(eval_args, generative_model)
