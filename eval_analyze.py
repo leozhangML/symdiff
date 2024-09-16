@@ -160,10 +160,8 @@ def main():
     dataset_info = get_dataset_info(args.dataset, args.remove_h)
 
     # Load model
-    generative_model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
-    
-    data_aug_at_sampling = eval_args.data_aug_at_sampling
-    generative_model.data_aug_at_sampling = data_aug_at_sampling
+    args.data_aug_at_sampling = eval_args.data_aug_at_sampling
+    generative_model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])    
 
     if prop_dist is not None:
         property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)
