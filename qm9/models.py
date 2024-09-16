@@ -610,8 +610,10 @@ def get_model(args, device, dataset_info, dataloader_train):
             data_aug_at_sampling=args.data_aug_at_sampling,
             )
 
-        if args.freeze_model_parts:
-            vdm = freeze_model_part(vdm, args.model_part_to_freeze)
+        # First check if args has a freeze_model_parts attribute
+        if "freeze_model_parts" in args.__dict__:
+            if args.freeze_model_parts:
+                vdm = freeze_model_part(vdm, args.model_part_to_freeze)
 
         return vdm, nodes_dist, prop_dist
 
