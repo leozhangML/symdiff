@@ -156,6 +156,8 @@ def random_rotation(x, output_matrix=False, use_matrices=None):
             #x = torch.matmul(Rz.transpose(1, 2), x)
             x = x.transpose(1, 2)
 
+            print("Shape of x after rotation: ", x.shape)
+
             return x.contiguous()
 
         else:

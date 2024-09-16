@@ -877,6 +877,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
+            test = data_aug_utils.random_rotation(eps_t_x)
+            asfddssd
             # Print shape of matrices
             for matrix in inverse_matrices:
                 print("Shape of matrix: ", matrix.shape)
