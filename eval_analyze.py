@@ -160,6 +160,9 @@ def main():
     if not hasattr(args, 'n_dims'):  # LEO
         print("n_dims not found!")
         args.n_dims = 3
+    if not hasattr(args, 'com_free'):  # LEO
+        print("com_free not found!")
+        args.com_free = True
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")

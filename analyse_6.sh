@@ -5,7 +5,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=analyse_DiTGaussian_aug_ablate
+#SBATCH --job-name=analyse_edm_9_4_m
 
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
@@ -47,8 +47,8 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-#python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-python eval_analyze.py --model_path outputs/DiTGaussian_aug_ablate --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
+python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
+#python eval_analyze.py --model_path outputs/DiTGaussian_aug_ablate --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
 #python t.py
 
 date -u

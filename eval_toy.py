@@ -5,8 +5,9 @@ import datetime
 
 import torch
 import numpy as np
+import matplotlib
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
-
 
 from qm9.models import get_model
 from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask, assert_correctly_masked
@@ -16,13 +17,19 @@ from sym_nn.utils import orthogonal_haar
 
 
 def save_fig(args, fig):
-    dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # for saving plots etc.
-    fig_name = "_".join([args.exp_name, args.dataset, dt])
+    dt = str(datetime.datetime.now())  # for saving plots etc.
+    fig_name = "_".join([dt, args.exp_name, args.dataset])
+    fig_name = fig_name + ".png"
     fig_path = os.path.join(
         args.fig_path, fig_name
     )
     fig.savefig(fig_path)
     plt.close()
+
+
+def convert_cpu_detach(*args):
+    np_args = (arg.cpu().detach() for arg in args)
+    return np_args
 
 
 def plot_positions(args, positions, project=False, plot_single=False, title=None):
@@ -43,12 +50,28 @@ def plot_positions(args, positions, project=False, plot_single=False, title=None
     save_fig(args, fig)
 
 
-def plot_radius(args, positions):
+def plot_positions_1d(args, positions, title=None):
+    # positions: [n, 2, 2] (np.array)
+    fig, axes = plt.subplots(1, 1)
+    radii = np.linalg.norm(positions, axis=-1)[:, 0]  # [n]
+    axes.scatter(radii, np.zeros(len(radii)), alpha=0.5)
+    axes.set_aspect('equal')
+
+    if title is not None:
+        axes.set_title(title)
+
+    save_fig(args, fig)
+
+
+def plot_radius(args, positions, plot_diff=False):
     radius_0 = np.linalg.norm(positions[:, 0], axis=-1)  # [n]
     radius_1 = np.linalg.norm(positions[:, 1], axis=-1)  # [n]
-    radius_diff = np.sqrt((radius_0 - radius_1)**2)
     fig, axes = plt.subplots(1, 1)
-    _ = axes.hist(radius_diff, bins=100)
+    if plot_diff:
+        radius_diff = np.sqrt((radius_0 - radius_1)**2)
+        _ = axes.hist(radius_diff, bins=100)
+    else:
+        _ = axes.hist(radius_0, bins=100)
     save_fig(args, fig)
 
 
@@ -75,56 +98,100 @@ def sample_chain(eval_args, generative_model):
     return chain_x
 
 
-def sample_outputs(args, xh, t, generative_model, n=5, plot=True):
-    # xh: [1, 2, 3]
+def sample_multiple_outputs(args, xh, t, generative_model, n=5, output_type="model"):
+    # xh: [1, 2, 3] or [1, 2, 2]
     # t: [1]
 
-    x_0 = xh[:, :, :2]
+    x = xh[:, :, :2].repeat_interleave(n, dim=0)  # [n, 2, 2]
     xh = xh.repeat_interleave(n, dim=0)  # [n, 2, 3]
+
     t = t.repeat_interleave(n)
     node_mask = torch.ones(n, 2, 1, device=args.device)
 
-    xh, gamma = generative_model.dynamics._forward(
-        t, xh, node_mask, None, None, return_gamma=True
-    )
+    if output_type == "model":
+        xh, gamma = generative_model.dynamics._forward(
+            t, xh, node_mask, None, None, return_gamma=True
+        )
+        return xh, gamma
+
+    elif output_type == "gamma":
+        gamma = generative_model.dynamics.gamma(t, x, node_mask)
+        return gamma
+
+    elif output_type == "k":
+        xh = generative_model.dynamics.k(
+            t, x, torch.zeros(n, 2, 1, device=args.device), 
+            node_mask)
+        return xh
+
+    else:
+        raise ValueError
+
+
+def plot_outputs(args, xh, t, generative_model, n=5, plot_gamma=True):
+    # xh: [1, 2, 3]
+    # t: [1]
+
+    x_0 = xh[0, :, :2]  # [2, 2]
+
+    if plot_gamma:
+        xh, gamma = sample_multiple_outputs(
+            args, xh, t, generative_model, n=n, output_type="model")
+        angles = gamma[:, :, 0]  # from action on (1, 0) on [n, 2, 2]
+    else:
+        xh = sample_multiple_outputs(
+            args, xh, t, generative_model, n=n, output_type="k")
+
     x = xh[:, :, :2]  # [n, 2, 2]
-    angles = gamma[:, :, 0]  # from action on (1, 0) on [n, 2, 2]
 
-    if plot:
-        print(f"x: {x_0}")
-        print(f"t: {t}")
+    print(f"x: {x_0}")
+    print(f"t: {t}")
 
-        x = x.cpu().detach().numpy()
-        angles = angles.cpu().detach().numpy()
+    x_0, x = convert_cpu_detach(x_0, x)
 
-        fig, axes = plt.subplots(1, 1)
+    fig, axes = plt.subplots(1, 1)
 
-        axes.scatter(x_0.cpu()[:, 0, 0], x_0.cpu()[:, 0, 1], label="x0_1", c="black")
-        axes.scatter(x_0.cpu()[:, 1, 0], x_0.cpu()[:, 1, 1], label="x0_2", c="yellow")
+    axes.scatter(x_0[0, 0], x_0[0, 1], label="x0_1", c="black")
+    axes.scatter(x_0[1, 0], x_0[1, 1], label="x0_2", c="yellow")
 
-        axes.scatter(x[:, 0, 0], x[:, 0, 1], alpha=0.5, label="x_1")
-        axes.scatter(x[:, 1, 0], x[:, 1, 1], alpha=0.5, label="x_2")
+    axes.scatter(x[:, 0, 0], x[:, 0, 1], alpha=0.5, label="x_1")
+    axes.scatter(x[:, 1, 0], x[:, 1, 1], alpha=0.5, label="x_2")
 
+    if plot_gamma:
+        angles = convert_cpu_detach(angles)
         axes.scatter(angles[:, 0], angles[:, 1], alpha=0.5, label="gamma")
 
-        fig.suptitle(f"t={t[0].item()}")
-        axes.legend()
-        axes.set_aspect('equal')
-        save_fig(args, fig)
+    fig.suptitle(f"t={t[0].item()}, plot_gamma={plot_gamma}")
+    axes.legend()
+    axes.set_aspect('equal')
+    save_fig(args, fig)
 
-    return x, angles
-
-
-def convert_cpu_detach(*args):
-    np_args = (arg.cpu().detach() for arg in args)
-    return np_args
+    if plot_gamma:
+        return x, gamma
+    else:
+        return x
 
 
-def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100):
+def plot_gamma_hist(args, xh, t, generative_model, n=5, use_model=True):
+    # xh: [1, 2, 3]
+    # t: [1]
+
+    # [n, 2, 2]
+    if use_model:
+        _, gamma = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="model")
+    else:
+        gamma = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="gamma")
+
+    angles = gamma[:, :, 0]  # [n, 2]
+
+    print(torch.angle(angles))
+
+
+def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100, use_gamma=True, plot_gamma=False):
 
     xh = sample_xh_batch_dataloader(args, iter_dataloader)[[0]]  # [1, 2, 3]
     t = sample_timestep(args, 1, generative_model)
-    noised_x = add_noise_x(args, xh, generative_model)
+    noised_x = add_noise_x(args, xh, generative_model)  # [1, 2, 2]
 
     # [1, 2, 2]
     g = orthogonal_haar(
@@ -136,40 +203,58 @@ def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100):
     g_xh = convert_x_to_xh(torch.bmm(noised_x, g.transpose(1, 2)))
 
     # [n, 2, 2]
-    fx, _ = sample_outputs(args, xh, t, generative_model, n=n, plot=False)
-    fg_x, _ = sample_outputs(args, g_xh, t, generative_model, n=n, plot=False)
+    if use_gamma:
+        fx, gamma_x = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="model")
+        fg_x, gamma_g_x = sample_multiple_outputs(args, g_xh, t, generative_model, n=n, output_type="model")
+    else:
+        fx = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="k")
+        fg_x = sample_multiple_outputs(args, g_xh, t, generative_model, n=n, output_type="k")
 
-    g_fx = torch.bmm(fx, g.repeat_interleave(n, dim=0).transpose(1, 2))
+    if plot_gamma:
+        assert use_gamma is True
+        g_gamma_x = torch.bmm(g.repeat_interleave(n, dim=0), gamma_x)
+    else:
+        g_fx = torch.bmm(fx, g.repeat_interleave(n, dim=0).transpose(1, 2))
 
     # plots
     fig, axes = plt.subplots(1, 2, figsize=(15, 8))
 
-    xh, fx = convert_cpu_detach(xh, fx)
-    g, g_xh, fg_x, g_fx = convert_cpu_detach(g, g_xh, fg_x, g_fx)
+    xh, g_xh = convert_cpu_detach(xh, g_xh)
 
-    # x, f(x)
+    # x, g_x
     axes[0].scatter(xh[:, :, 0], xh[:, :, 1], label="x")
-    axes[0].scatter(fx[:, 0, 0], fx[:, 0, 1], alpha=0.5, label="f(x)_1")
-    axes[0].scatter(fx[:, 1, 0], fx[:, 1, 1], alpha=0.5, label="f(x)_2")
-
-    # g_x, f(g_x)
     axes[0].scatter(g_xh[:, :, 0], g_xh[:, :, 1], label="g_x")
-    axes[0].scatter(fg_x[:, 0, 0], fg_x[:, 0, 1], alpha=0.5, label="f(g_x)_1")
-    axes[0].scatter(fg_x[:, 1, 0], fg_x[:, 1, 1], alpha=0.5, label="f(g_x)_2")
 
-    # g_f(x)
-    axes[0].scatter(g_fx[:, 0, 0], g_fx[:, 0, 1], alpha=0.5, label="g_f(x)_1")
-    axes[0].scatter(g_fx[:, 1, 0], g_fx[:, 1, 1], alpha=0.5, label="g_f(x)_2")
+    if plot_gamma:
+        gamma_x, gamma_g_x, g_gamma_x = convert_cpu_detach(gamma_x, gamma_g_x, g_gamma_x)
+
+        axes[0].scatter(gamma_x[:, 0, 0], gamma_x[:, 1, 0], alpha=0.2, label="gamma_x")
+        axes[0].scatter(gamma_g_x[:, 0, 0], gamma_g_x[:, 1, 0], alpha=0.2, label="gamma_g_x")
+        axes[0].scatter(g_gamma_x[:, 0, 0], g_gamma_x[:, 1, 0], alpha=0.2, label="g_gamma_x")
+
+    else:
+        fx, fg_x, g_fx = convert_cpu_detach(fx, fg_x, g_fx)
+
+        # f(x)
+        axes[0].scatter(fx[:, 0, 0], fx[:, 0, 1], alpha=0.2, label="f(x)_1")
+        axes[0].scatter(fx[:, 1, 0], fx[:, 1, 1], alpha=0.2, label="f(x)_2")
+
+        # f(g_x)
+        axes[0].scatter(fg_x[:, 0, 0], fg_x[:, 0, 1], alpha=0.2, label="f(g_x)_1")
+        axes[0].scatter(fg_x[:, 1, 0], fg_x[:, 1, 1], alpha=0.2, label="f(g_x)_2")
+
+        # g_f(x)
+        axes[0].scatter(g_fx[:, 0, 0], g_fx[:, 0, 1], alpha=0.2, label="g_f(x)_1")
+        axes[0].scatter(g_fx[:, 1, 0], g_fx[:, 1, 1], alpha=0.2, label="g_f(x)_2")
+
+        # first component of f(g_x) and g_f(x)
+        axes[1].scatter(fg_x[:, 0, 0], fg_x[:, 0, 1], alpha=0.2, label="f(g_x)_1")
+        axes[1].scatter(g_fx[:, 0, 0], g_fx[:, 0, 1], alpha=0.2, label="g_f(x)_1")
 
     axes[0].legend()
-
-    # first component of f(g_x) and g_f(x)
-    axes[1].scatter(fg_x[:, 0, 0], fg_x[:, 0, 1], alpha=0.5, label="f(g_x)_1")
-    axes[1].scatter(g_fx[:, 0, 0], g_fx[:, 0, 1], alpha=0.5, label="g_f(x)_1")
-    
     axes[1].legend()
 
-    fig.suptitle(f"t={t[0].item()}, n={n}")
+    fig.suptitle(f"t={t[0].item()}, n={n}, use_gamma={use_gamma}, plot_gamma={plot_gamma}")
     save_fig(args, fig)
 
 
@@ -205,6 +290,8 @@ def add_noise_x(args, xh, generative_model, t_int=None, fix_noise=False, return_
     sigma_t = generative_model.sigma(gamma_t, xh)
 
     n_samples = 1 if fix_noise else bs
+
+    # samples eps_x com-free and eps_h
     eps = generative_model.sample_combined_position_feature_noise(
         n_samples=n_samples, n_nodes=2, node_mask=node_mask, com_free=args.com_free
     )[:, :, :2]
@@ -249,6 +336,11 @@ def main():
     parser.add_argument('--model_path', type=str, default="")
     parser.add_argument('--n_samples', type=int, default=100)
 
+    parser.add_argument('--visualise_data', action="store_true")
+    
+    parser.add_argument('--visualise_gamma', action="store_true")
+    
+
     eval_args = parser.parse_args()
 
     with open(os.path.join(eval_args.model_path, 'args.pickle'), 'rb') as f:
@@ -266,7 +358,7 @@ def main():
     # load saved model and datasets
     generative_model, _, _ = get_model(args, device, None, None)
     generative_model.to(device)
-    print(f"Loaded model from: {eval_args.model_path}")
+    print(f"\nLoaded model from: {eval_args.model_path}\n")
 
     fn = 'generative_model_ema.npy' if args.ema_decay > 0 else 'generative_model.npy'
     flow_state_dict = torch.load(os.path.join(eval_args.model_path, fn), map_location=device)
@@ -277,23 +369,25 @@ def main():
     iter_train_dataloader = iter(dataloaders["train"])
     iter_val_dataloader = iter(dataloaders["valid"])
 
-    # visualise training dataset
-    print("\nplotting training dataset")
-    train_positions = dataloaders["train"].dataset.data["positions"]
-    plot_positions(args, train_positions, project=False, 
-                   plot_single=False, title="train_dataset")
-    plot_positions(args, train_positions, project=True, 
-                   plot_single=False, title="train_dataset radius histogram")
+    if eval_args.visualise_data:
+        # visualise training dataset
+        print("\nplotting training dataset")
+        train_positions = dataloaders["train"].dataset.data["positions"]
+        plot_positions(args, train_positions, project=False, 
+                       plot_single=False, title="train_dataset")
+        plot_positions(args, train_positions, project=True, 
+                       plot_single=False, title="train_dataset radius histogram")
 
-    # visualise p_t
-    print("\nplotting p_t")
-    visualise_p_t(args, iter_train_dataloader, generative_model)
+        # visualise p_t
+        print("\nplotting p_t")
+        visualise_p_t(args, iter_train_dataloader, generative_model)
 
     # visualise samples
-    print("\nplotting samples from model")
-    samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
-    plot_positions(args, samples, project=False, plot_single=False, title="samples")
-    plot_radius(samples)
+    #print("\nplotting samples from model")
+    #samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
+    #plot_positions(args, samples, project=False, plot_single=False, title="samples")
+    #plot_radius(args, samples)
+    #plot_positions_1d(args, samples, title="samples")
 
     # visualise chain
     #chain = sample_chain(eval_args, generative_model)
@@ -301,16 +395,21 @@ def main():
     #plot_positions(chain, project=True, plot_single=False)
 
     # plot samples from gamma
-    print("\nplotting gamma samples")
-    xh = sample_xh_batch_dataloader(args, iter_train_dataloader)[[0]]
-    x, t = add_noise_x(args, xh, generative_model, return_t=True)
-    print(f"x_1_norm={torch.norm(x[:, 0])}, x_2_norm={torch.norm(x[:, 1])}")
-    xh = convert_x_to_xh(x)
-    sample_outputs(args, xh, t, generative_model, n=10, plot=True) 
+    if eval_args.visualise_gamma:
+        print("\nplotting gamma samples")
+        xh = sample_xh_batch_dataloader(args, iter_train_dataloader)[[0]]
+        x, t = add_noise_x(args, xh, generative_model, return_t=True)
+        print(f"x_1_norm={torch.norm(x[:, 0])}, x_2_norm={torch.norm(x[:, 1])}")
+        xh = convert_x_to_xh(x)
+        plot_outputs(args, xh, t, generative_model, n=10, plot_gamma=True) 
+
+    plot_gamma_hist(args, xh, t, generative_model, n=10)
 
     # check stochastic equivariance
     print("\nplotting stochastic equivariance")
-    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=100)
+    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=2000)  # check equivariance of symdiff
+    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=10, use_gamma=False)  # check equivariance of k
+    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=5000, use_gamma=True, plot_gamma=True)  # check equivariance of gamma
 
     # need to implement equivariance metrics, and k with gaussian noise
 
