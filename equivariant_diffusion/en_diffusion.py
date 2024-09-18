@@ -847,11 +847,12 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         return neg_log_pxh
 
-    def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False):
+    def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False, remove_noise=False):
         """Samples from zs ~ p(zs | zt). Only used during sampling."""
-        gamma_s = self.gamma(s)
+        gamma_s = self.gamma(s)  # [bs, 1]
         gamma_t = self.gamma(t)
 
+        # [bs, 1, 1]
         sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
             self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, zt)
 
@@ -872,17 +873,20 @@ class EnVariationalDiffusion(torch.nn.Module):
         sigma = sigma_t_given_s * sigma_s / sigma_t
 
         # Sample zs given the paramters derived from zt.
-        zs = self.sample_normal(mu, sigma, node_mask, fix_noise, com_free=self.com_free)
+        if remove_noise:
+            return mu, sigma
+        else:
+            zs = self.sample_normal(mu, sigma, node_mask, fix_noise, com_free=self.com_free)
 
-        if self.com_free:
-            # Project down to avoid numerical runaway of the center of gravity.
-            zs = torch.cat(
-                [diffusion_utils.remove_mean_with_mask(zs[:, :, :self.n_dims],
-                                                       node_mask),
-                zs[:, :, self.n_dims:]], dim=2
-            )
+            if self.com_free:
+                # Project down to avoid numerical runaway of the center of gravity.
+                zs = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(zs[:, :, :self.n_dims],
+                                                           node_mask),
+                    zs[:, :, self.n_dims:]], dim=2
+                )
 
-        return zs
+            return zs
 
     def sample_combined_position_feature_noise(self, n_samples, n_nodes, node_mask, com_free=True):
         """
@@ -920,7 +924,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Iteratively sample p(z_s | z_t) for t = 1, ..., T, with s = t - 1.
         for s in reversed(range(0, self.T)):
-            s_array = torch.full((n_samples, 1), fill_value=s, device=z.device)
+            s_array = torch.full((n_samples, 1), fill_value=s, device=z.device)  # [n_samples, 1]
             t_array = s_array + 1
             s_array = s_array / self.T
             t_array = t_array / self.T

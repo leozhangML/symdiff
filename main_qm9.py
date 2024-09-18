@@ -363,6 +363,8 @@ def main():
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
+            # add equivariance metrics here
+
             if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
                 best_nll_val = nll_val
                 best_nll_test = nll_test

@@ -67,7 +67,7 @@ class EGNN_dynamics_QM9(nn.Module):
 
         N = torch.sum(node_mask, dim=1)  # [bs, 1]
 
-        print("EGNN_dynamics input norm: ", torch.mean(torch.sum(torch.norm(xh, dim=-1) / N, dim=-1)))
+        #print("EGNN_dynamics input norm: ", torch.mean(torch.sum(torch.norm(xh, dim=-1) / N, dim=-1)))
 
         bs, n_nodes, dims = xh.shape
         h_dims = dims - self.n_dims
@@ -133,7 +133,7 @@ class EGNN_dynamics_QM9(nn.Module):
         else:
             h_final = h_final.view(bs, n_nodes, -1)  # [bs, n_nodes, h_dim]
             out = torch.cat([vel, h_final], dim=2)
-            print("EGNN_dynamics output norm: ", torch.mean(torch.sum(torch.norm(out, dim=-1) / N, dim=-1)))
+            #print("EGNN_dynamics output norm: ", torch.mean(torch.sum(torch.norm(out, dim=-1) / N, dim=-1)))
             return out
 
     def get_adj_matrix(self, n_nodes, batch_size, device):

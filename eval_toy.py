@@ -29,10 +29,13 @@ def save_fig(args, fig):
 
 def convert_cpu_detach(*args):
     np_args = (arg.cpu().detach() for arg in args)
-    return np_args
+    if len(args) == 1:
+        return next(np_args)
+    else:
+        return np_args
 
 
-def plot_positions(args, positions, project=False, plot_single=False, title=None):
+def plot_positions(args, positions, project=False, plot_single=False):
     # positions: [n, 2, 2] (np.array)
     fig, axes = plt.subplots(1, 1)
     if project:
@@ -44,22 +47,17 @@ def plot_positions(args, positions, project=False, plot_single=False, title=None
             axes.scatter(positions[:, 1, 0], positions[:, 1, 1], alpha=0.5)
         axes.set_aspect('equal')
 
-    if title is not None:
-        axes.set_title(title)
-
+    fig.suptitle(f"{args.exp_name}\nplot_positions")
     save_fig(args, fig)
 
 
-def plot_positions_1d(args, positions, title=None):
+def plot_positions_1d(args, positions):
     # positions: [n, 2, 2] (np.array)
     fig, axes = plt.subplots(1, 1)
     radii = np.linalg.norm(positions, axis=-1)[:, 0]  # [n]
     axes.scatter(radii, np.zeros(len(radii)), alpha=0.5)
-    axes.set_aspect('equal')
 
-    if title is not None:
-        axes.set_title(title)
-
+    fig.suptitle(f"{args.exp_name}\nplot_positions_1d")
     save_fig(args, fig)
 
 
@@ -72,6 +70,7 @@ def plot_radius(args, positions, plot_diff=False):
         _ = axes.hist(radius_diff, bins=100)
     else:
         _ = axes.hist(radius_0, bins=100)
+    fig.suptitle(f"{args.exp_name}\nplot_radius")
     save_fig(args, fig)
 
 
@@ -98,7 +97,7 @@ def sample_chain(eval_args, generative_model):
     return chain_x
 
 
-def sample_multiple_outputs(args, xh, t, generative_model, n=5, output_type="model"):
+def sample_multiple_outputs(args, xh, t, generative_model, n=5, output_type="model", return_h=False):
     # xh: [1, 2, 3] or [1, 2, 2]
     # t: [1]
 
@@ -112,7 +111,10 @@ def sample_multiple_outputs(args, xh, t, generative_model, n=5, output_type="mod
         xh, gamma = generative_model.dynamics._forward(
             t, xh, node_mask, None, None, return_gamma=True
         )
-        return xh, gamma
+        if return_h:
+            return xh, gamma
+        else:
+            return xh[:, :, :2], gamma
 
     elif output_type == "gamma":
         gamma = generative_model.dynamics.gamma(t, x, node_mask)
@@ -122,7 +124,10 @@ def sample_multiple_outputs(args, xh, t, generative_model, n=5, output_type="mod
         xh = generative_model.dynamics.k(
             t, x, torch.zeros(n, 2, 1, device=args.device), 
             node_mask)
-        return xh
+        if return_h:
+            return xh
+        else:
+            return xh[:, :, :2]
 
     else:
         raise ValueError
@@ -135,6 +140,7 @@ def plot_outputs(args, xh, t, generative_model, n=5, plot_gamma=True):
     x_0 = xh[0, :, :2]  # [2, 2]
 
     if plot_gamma:
+        # gammas look consistent for less_noise
         xh, gamma = sample_multiple_outputs(
             args, xh, t, generative_model, n=n, output_type="model")
         angles = gamma[:, :, 0]  # from action on (1, 0) on [n, 2, 2]
@@ -161,7 +167,7 @@ def plot_outputs(args, xh, t, generative_model, n=5, plot_gamma=True):
         angles = convert_cpu_detach(angles)
         axes.scatter(angles[:, 0], angles[:, 1], alpha=0.5, label="gamma")
 
-    fig.suptitle(f"t={t[0].item()}, plot_gamma={plot_gamma}")
+    fig.suptitle(f"{args.exp_name}\nplot_outputs: t={t[0].item()}, plot_gamma={plot_gamma}")
     axes.legend()
     axes.set_aspect('equal')
     save_fig(args, fig)
@@ -172,26 +178,100 @@ def plot_outputs(args, xh, t, generative_model, n=5, plot_gamma=True):
         return x
 
 
-def plot_gamma_hist(args, xh, t, generative_model, n=5, use_model=True):
+def compute_angles(gamma):
+    # gamma: [n, 2, 2]
+    vector = gamma[:, :, 0]  # [n, 2]
+    neg_y = vector[:, 1] < 0  # [n]
+    
+    norm = torch.norm(vector, dim=-1)  # [n]
+    angles = torch.arccos(vector[:, 0] / norm)  # in [0, \pi]
+    angles[neg_y] = (2 * torch.pi) - angles[neg_y]
+
+    #angles = torch.arctan(angles[:, 1] / angles[:, 0])
+    #angles = angles % (2 * torch.pi)
+    return angles
+
+
+def plot_gamma_hist(args, iter_dataloader, generative_model, n=5):
     # xh: [1, 2, 3]
     # t: [1]
 
+    x, t = get_x_t(args, iter_dataloader, generative_model, add_noise=True)
+    xh = convert_x_to_xh(x)
+
+    xh0 = xh * 1.0
+
     # [n, 2, 2]
-    if use_model:
-        _, gamma = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="model")
-    else:
-        gamma = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="gamma")
+    _, gamma_model = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="model")
+    gamma_gamma = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type="gamma")
 
-    angles = gamma[:, :, 0]  # [n, 2]
+    angles_model = compute_angles(gamma_model)
+    angles_gamma = compute_angles(gamma_gamma)
+    angles_model, angles_gamma = convert_cpu_detach(angles_model, angles_gamma)
 
-    print(torch.angle(angles))
+    print(torch.norm(xh - xh0))
+
+    fig, axes = plt.subplots(1, 1, figsize=(15, 8))
+    _ = axes.hist(angles_model, bins=100, alpha=0.5, label="model")
+    _ = axes.hist(angles_gamma, bins=100, alpha=0.5, label="gamma")
+    fig.suptitle(f"{args.exp_name}\nplot_gamma_hist: n={n}")
+    save_fig(args, fig)
+
+
+def check_stoc_equivariance_gamma_hist(args, iter_dataloader, generative_model, n=100, use_model=True):
+
+    x, t = get_x_t(args, iter_dataloader, generative_model, add_noise=True)
+    output_type = "model" if use_model else "gamma"
+
+    # [1, 2, 2]
+    g = orthogonal_haar(
+        dim=2, target_tensor=torch.empty(1, device=args.device)
+    )
+
+    # [1, 2, 3]
+    xh = convert_x_to_xh(x)
+    g_xh = convert_x_to_xh(torch.bmm(x, g.transpose(1, 2)))
+
+    # [n, 2, 2]
+    gamma_x = sample_multiple_outputs(args, xh, t, generative_model, n=n, output_type=output_type)
+    gamma_x = gamma_x[-1] if use_model else gamma_x
+
+    gamma_g_x = sample_multiple_outputs(args, g_xh, t, generative_model, n=n, output_type=output_type)
+    gamma_g_x = gamma_g_x[-1] if use_model else gamma_g_x
+
+    print("gamma_x: ", gamma_x.shape)
+    print("g: ", g.shape)
+
+    g_gamma_x = torch.bmm(g.repeat_interleave(n, dim=0), gamma_x)
+
+    angles_gamma_x = compute_angles(gamma_x)
+    angles_gamma_g_x = compute_angles(gamma_g_x)
+    angles_g_gamma_x = compute_angles(g_gamma_x)
+
+    angles_gamma_x, angles_gamma_g_x, angles_g_gamma_x = convert_cpu_detach(
+        angles_gamma_x, angles_gamma_g_x, angles_g_gamma_x)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 8))
+    _ = axes[0].hist(angles_gamma_x, bins=100)
+    _ = axes[1].hist(angles_gamma_g_x, bins=100)
+    _ = axes[2].hist(angles_g_gamma_x, bins=100)
+
+    axes[0].set_title("angles_gamma_x")
+    axes[1].set_title("angles_gamma_g_x")
+    axes[2].set_title("angles_g_gamma_x")
+    fig.suptitle(f"{args.exp_name}\ncheck_stoc_equivariance_gamma_hist: use_model={use_model}")
+
+    save_fig(args, fig)
+
+
+def plot_system_on_axes(x, axis, label, same_plot=False):
+    # [n, 2, 2]
+    pass
 
 
 def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100, use_gamma=True, plot_gamma=False):
 
-    xh = sample_xh_batch_dataloader(args, iter_dataloader)[[0]]  # [1, 2, 3]
-    t = sample_timestep(args, 1, generative_model)
-    noised_x = add_noise_x(args, xh, generative_model)  # [1, 2, 2]
+    x, t = get_x_t(args, iter_dataloader, generative_model, add_noise=True)
 
     # [1, 2, 2]
     g = orthogonal_haar(
@@ -199,8 +279,8 @@ def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100, use_
     )
 
     # [1, 2, 3] 
-    xh = convert_x_to_xh(noised_x)
-    g_xh = convert_x_to_xh(torch.bmm(noised_x, g.transpose(1, 2)))
+    xh = convert_x_to_xh(x)
+    g_xh = convert_x_to_xh(torch.bmm(x, g.transpose(1, 2)))
 
     # [n, 2, 2]
     if use_gamma:
@@ -254,7 +334,7 @@ def check_stoc_equivariance(args, iter_dataloader, generative_model, n=100, use_
     axes[0].legend()
     axes[1].legend()
 
-    fig.suptitle(f"t={t[0].item()}, n={n}, use_gamma={use_gamma}, plot_gamma={plot_gamma}")
+    fig.suptitle(f"{args.exp_name}\ncheck_stoc_equivariance: t={t[0].item()}, n={n}, use_gamma={use_gamma}, plot_gamma={plot_gamma}")
     save_fig(args, fig)
 
 
@@ -314,6 +394,14 @@ def sample_xh_batch_dataloader(args, iter_dataloader):
     h = torch.zeros(len(x), 2, 1, device=args.device)
 
     return torch.cat([x, h], dim=-1)  # [bs, 2, 3]
+    
+
+def get_x_t(args, iter_dataloader, generative_model, add_noise=True):
+    xh = sample_xh_batch_dataloader(args, iter_dataloader)[[0]]  # [1, 2, 3]
+    t = sample_timestep(args, 1, generative_model)
+    if add_noise:
+        xh = add_noise_x(args, xh, generative_model)  # [1, 2, 2]
+    return xh[:, :, :2], t
 
 
 def visualise_p_t(args, iter_train_dataloader, generative_model):
@@ -337,8 +425,14 @@ def main():
     parser.add_argument('--n_samples', type=int, default=100)
 
     parser.add_argument('--visualise_data', action="store_true")
+
+    parser.add_argument('--visualise_samples', action="store_true")
     
     parser.add_argument('--visualise_gamma', action="store_true")
+
+    parser.add_argument('--visualise_gamma_hist', action="store_true")
+
+    parser.add_argument('--visualise_stoc_eq', action="store_true")
     
 
     eval_args = parser.parse_args()
@@ -383,11 +477,12 @@ def main():
         visualise_p_t(args, iter_train_dataloader, generative_model)
 
     # visualise samples
-    #print("\nplotting samples from model")
-    #samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
-    #plot_positions(args, samples, project=False, plot_single=False, title="samples")
-    #plot_radius(args, samples)
-    #plot_positions_1d(args, samples, title="samples")
+    if eval_args.visualise_samples:
+        print("\nplotting samples from model")
+        samples = sample(eval_args, generative_model, fix_noise=False, return_np=True)
+        plot_positions(args, samples, project=False, plot_single=False)
+        plot_radius(args, samples)
+        plot_positions_1d(args, samples)
 
     # visualise chain
     #chain = sample_chain(eval_args, generative_model)
@@ -401,15 +496,20 @@ def main():
         x, t = add_noise_x(args, xh, generative_model, return_t=True)
         print(f"x_1_norm={torch.norm(x[:, 0])}, x_2_norm={torch.norm(x[:, 1])}")
         xh = convert_x_to_xh(x)
-        plot_outputs(args, xh, t, generative_model, n=10, plot_gamma=True) 
+        plot_outputs(args, xh, t, generative_model, n=100, plot_gamma=True) 
 
-    plot_gamma_hist(args, xh, t, generative_model, n=10)
+    # plot gamma distribution
+    if eval_args.visualise_gamma_hist:
+        print("\nplotting histogram of gamma\n")
+        plot_gamma_hist(args, iter_val_dataloader, generative_model, n=1000)
+        check_stoc_equivariance_gamma_hist(args, iter_val_dataloader, generative_model, n=1000, use_model=False)
 
     # check stochastic equivariance
-    print("\nplotting stochastic equivariance")
-    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=2000)  # check equivariance of symdiff
-    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=10, use_gamma=False)  # check equivariance of k
-    check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=5000, use_gamma=True, plot_gamma=True)  # check equivariance of gamma
+    if eval_args.visualise_stoc_eq:
+        print("\nplotting stochastic equivariance")
+        check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=2000)  # check equivariance of symdiff
+        check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=10, use_gamma=False)  # check equivariance of k
+        check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=5000, use_gamma=True, plot_gamma=True)  # check equivariance of gamma
 
     # need to implement equivariance metrics, and k with gaussian noise
 

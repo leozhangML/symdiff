@@ -130,3 +130,172 @@ class GaussianLayer(nn.Module):
         pos_emb = gaussian(pos_emb.float(), mean, std).type_as(self.means.weight)  # [bs, n_nodes, n_nodes, K]
         pos_emb = pos_emb * node_mask[:, :, :, None] * node_mask[:, None, :, :]
         return pos_emb
+
+def add_noise(args, x, h, node_mask, eval_model, sample_t0=False):
+    # x: [bs, n_nodes, n_dims]
+    # h: [bs, n_nodes, in_node_nf]
+    # node_mask: [bs, n_nodes, 1]
+
+    if args.molecule:
+        xh = torch.cat([x, h['categorical'], h['integer']], dim=-1)  # [bs, n_nodes, dims]
+    else:
+        xh = torch.cat([x, torch.zeros_like(h, device=eval_model.device)], dim=-1)
+
+    if sample_t0:
+        t = torch.zeros(len(x), 1, device=eval_model.device)
+        gamma_0 = eval_model.inflate_batch_array(eval_model.gamma(t), x)
+        alpha_0 = eval_model.alpha(gamma_0, x)
+        sigma_0 = eval_model.sigma(gamma_0, x)
+
+        # Sample z_0 given x, h for timestep t, from q(z_t | x, h)
+        eps_0 = eval_model.sample_combined_position_feature_noise(
+            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=args.com_free)
+        z_t = alpha_0 * xh + sigma_0 * eps_0
+
+        return z_t
+
+    else:
+        t_int = torch.randint(
+            1, eval_model.T + 1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
+        s_int = t_int - 1
+
+        # Normalize t to [0, 1]. Note that the negative
+        # step of s will never be used, since then p(x | z0) is computed.
+        s = s_int / eval_model.T
+        t = t_int / eval_model.T
+
+        # Compute gamma_s and gamma_t via the network.
+        gamma_s = eval_model.inflate_batch_array(eval_model.gamma(s), x)
+        gamma_t = eval_model.inflate_batch_array(eval_model.gamma(t), x)
+
+        # Compute alpha_t and sigma_t from gamma.
+        alpha_t = eval_model.alpha(gamma_t, x)  # [bs, 1, 1]
+        sigma_t = eval_model.sigma(gamma_t, x)
+
+        # Sample zt ~ Normal(alpha_t x, sigma_t)
+        eps = eval_model.sample_combined_position_feature_noise(
+            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=args.com_free)  # [bs, n_nodes, dims] - masks out non-atom indexes
+
+        # Sample z_t given x, h for timestep t, from q(z_t | x, h)
+        z_t = alpha_t * xh + sigma_t * eps
+
+    return z_t, gamma_s, gamma_t, s, t
+
+
+def batched_inputs(t, xh, node_mask, n, eval_model, model="model"):
+    # t: [bs, 1]
+    # xh_t: [bs, n_nodes, dims]
+
+    _, n_nodes, dims = xh.shape
+
+    repeated_t = t.unsqueeze(1).repeat_interleave(n, dim=1).reshape(-1, 1)  # [bs*n, 1]
+    repeated_xh = xh.unsqueeze(1).repeat_interleave(n, dim=1).reshape(-1, n_nodes, dims)  # [bs*n, n_nodes, dims]
+    repeated_node_mask = node_mask.unsqueeze(1).repeat_interleave(n, dim=1).reshape(-1, n_nodes, 1)  # [bs*n, n_nodes, 1]
+
+    """
+    if model == "model":
+        f_xh = eval_model.phi(
+        repeated_xh, repeated_t,
+        repeated_node_mask, None, None
+    )
+
+    elif model == "backbone":
+        f_xh = eval_model.dynamics.k(
+            repeated_t, repeated_xh[:, :, :args.n_dims], 
+            repeated_xh[:, :, args.n_dims:], repeated_node_mask
+        )
+    return f_xh.reshape(bs, n, n_nodes, dims)
+    """
+
+    return repeated_t, repeated_xh, repeated_node_mask
+
+def iwae_equivariance(args, s, xh_s, t, xh_t, node_mask, eval_model, n_importance_samples):
+    # s: [bs, 1]
+    # xh_s: [bs, n_nodes, dims]
+
+    bs, n_nodes, dims = xh_s.shape
+
+    repeated_s, repeated_xh_s, repeated_node_mask = batched_inputs(args, s, xh_s, node_mask, n_importance_samples, eval_model)
+    repeated_t, repeated_xh_t, _ = batched_inputs(args, t, xh_t, node_mask, n_importance_samples, eval_model)
+
+    # [bs*n_importance_samples, n_nodes, dims], [bs*n_importance_samples, 1, 1]
+    mu, sigma = eval_model.sample_p_zs_given_zt(
+        repeated_s, repeated_t, repeated_xh_t, 
+        repeated_node_mask, None, None, remove_noise=True
+    )
+
+    sigma = sigma.reshape(bs, n_importance_samples, 1, 1)
+    mu_x = mu[:, :, :args.n_dims].reshape(bs, n_importance_samples, n_nodes, args.n_dims)
+
+    mean_diff = torch.sum((repeated_xh_s - mu)[:, :, :args.n_dims].pow(2), dim=(1, 2))
+
+
+
+
+
+
+
+
+
+
+
+
+    f_xh_s = batched_inputs(s, xh_s, node_mask, n_importance_samples, eval_model)  # [bs, n_importance_samples, n_nodes, dims]
+    f_xh_t = batched_inputs(t, xh_t, node_mask, n_importance_samples, eval_model)
+
+
+
+
+
+    bs, n_nodes, dims = xh_s
+
+    repeated_s = s.unsqueeze(1).repeat_interleave(n_importance_samples, dim=1)  # [bs, n_importance_samples, 1]
+    repeated_xh_s = xh_s.unsqueeze(1).repeat_interleave(n_importance_samples, dim=1)  # [bs, n_importance_samples, n_nodes, dims]
+
+    repeated_t = t.unsqueeze(1).repeat_interleave(n_importance_samples, dim=1)
+    repeated_xh_t = xh_t.unsqueeze(1).repeat_interleave(n_importance_samples, dim=1)
+
+    repeated_node_mask = node_mask.unsqueeze(1).repeat_interleave(n_importance_samples, dim=1)  # [bs, n_importance_samples, n_nodes, 1]
+
+    f_xh_s = eval_model.phi(
+        repeated_xh_s.reshape(-1, n_nodes, dims), repeated_s.reshape(-1, 1),
+        repeated_node_mask.reshape(-1, n_nodes, 1), None, None
+    )
+
+    f_xh_s = eval_model.phi(
+        repeated_xh_s.reshape(-1, n_nodes, dims), repeated_s.reshape(-1, 1),
+        repeated_node_mask.reshape(-1, n_nodes, 1), None, None
+    )
+
+
+def compute_equivariance_metrics_model(args, x, h, node_mask, eval_model):
+    # h is {'categorical': one_hot, 'integer': charges} for args.molecule as we use this within test
+
+    z_t, gamma_s, gamma_t, s, t = add_noise(args, x, h, node_mask, eval_model, sample_t0=False) # [bs, n_nodes, dims], [bs, 1, 1], [bs, 1]
+    z_s = eval_model.sample_p_zs_given_zt(s, t, z_t, node_mask, None, None)
+
+    g = orthogonal_haar(dim=args.n_dims, target_tensor=torch.empty(len(x), device=eval_model.device))  # [bs, n_dims, n_dims]
+
+    g_z_t = torch.cat(
+        [torch.bmm(z_t[:, :, :args.n_dims], g.transpose(1, 2)),
+         z_t[:, :, args.n_dims:]], dim=-1
+    )
+
+    g_s_t = torch.cat(
+        [torch.bmm(z_s[:, :, :args.n_dims], g.transpose(1, 2)),
+         z_s[:, :, args.n_dims:]], dim=-1
+    )
+
+
+
+
+    sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
+            eval_model.sigma_and_alpha_t_given_s(gamma_t, gamma_s, z_t)
+    sigma_s = eval_model.sigma(gamma_s, target_tensor=z_t)
+    sigma_t = eval_model.sigma(gamma_t, target_tensor=z_t)
+
+
+
+
+def compute_equivariance_metrics_backbone():
+    pass
