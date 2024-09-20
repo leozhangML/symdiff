@@ -153,6 +153,9 @@ parser.add_argument("--sigma_max", type=float, default=10, help="VE schedule")
 parser.add_argument("--print_grad_norms", action="store_true", help="whether to show the gamma and k grad norms")
 parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
+parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
+parser.add_argument("--n_importance_samples", type=int, default=10, help="whether to log the equivariance metrics")
+
 # -------- DiT args -------- #
 
 parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT")
@@ -330,6 +333,10 @@ def main():
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=None, property_norms=None)
 
+            if args.use_equivariance_metric:
+                nll_val, model_metric_val, backbone_metric_val = nll_val
+                nll_test, model_metric_test, backbone_metric_test = nll_test
+
             if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
                 best_nll_val = nll_val
                 best_nll_test = nll_test
@@ -349,6 +356,12 @@ def main():
             wandb.log({"Val loss ": nll_val}, commit=True)
             wandb.log({"Test loss ": nll_test}, commit=True)
             wandb.log({"Best cross-validated test loss ": best_nll_test}, commit=True)
+
+            if args.use_equivariance_metric:
+                wandb.log({"Val model equivariance metric ": model_metric_val}, commit=True)
+                wandb.log({"Val backbone equivariance metric ": backbone_metric_val}, commit=True)
+                wandb.log({"Test model equivariance metric ": model_metric_test}, commit=True)
+                wandb.log({"Test backbone equivariance metric ": backbone_metric_test}, commit=True)
 
         # saves final model (by epochs)
         if epoch == args.n_epochs-1:

@@ -395,9 +395,9 @@ class EnVariationalDiffusion(torch.nn.Module):
         else:
             return torch.exp(-gamma[1])  # as alpha=1
 
-    def subspace_dimensionality(self, node_mask):  # [bs, n_nodes]
+    def subspace_dimensionality(self, node_mask):  # [bs, n_nodes, 1]
         """Compute the dimensionality on translation-invariant linear subspace where distributions on x are defined."""
-        number_of_nodes = torch.sum(node_mask.squeeze(2), dim=1)
+        number_of_nodes = torch.sum(node_mask.squeeze(2), dim=1)  # [bs]
         if self.com_free:
             return (number_of_nodes - 1) * self.n_dims
         else:
@@ -585,21 +585,40 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         return degrees_of_freedom_x * (- log_sigma_x - 0.5 * np.log(2 * np.pi))
 
-    def sample_p_xh_given_z0(self, z0, node_mask, edge_mask, context, fix_noise=False):  # last time step
+    def sample_p_xh_given_z0(self, z0, node_mask, edge_mask, context, fix_noise=False, 
+                             remove_noise=False, model="model"):  # last time step
         """Samples x ~ p(x|z0)."""
         zeros = torch.zeros(size=(z0.size(0), 1), device=z0.device)  
         gamma_0 = self.gamma(zeros)  # [bs, 1]
         # Computes sqrt(sigma_0^2 / alpha_0^2)
         if self.com_free:
-            sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs]
+            sigma_x = self.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs, 1]
         else:
             sigma_x = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
-        net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims] - should also include h?
+
+        if model == "model":
+            net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims] - should also include h?
+        elif model == "backbone":
+            x = z0[:, :, :self.n_dims]
+            h = z0[:, :, self.n_dims:]
+            net_out = self.dynamics.k(zeros, x, h, node_mask)
+        else:
+            raise ValueError
 
         # Compute mu for p(zs | zt).
         mu_x = self.compute_x_pred(net_out, z0, gamma_0)
-        xh = self.sample_normal(mu=mu_x, sigma=sigma_x, node_mask=node_mask, 
-                                fix_noise=fix_noise, com_free=self.com_free)
+        if remove_noise:
+            if self.com_free:
+                # Project down to avoid numerical runaway of the center of gravity.
+                mu_x = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(mu_x[:, :, :self.n_dims],
+                                                           node_mask),
+                    mu_x[:, :, self.n_dims:]], dim=2
+                )
+            return mu_x, sigma_x  # [bs, n_nodes, dims]
+        else:
+            xh = self.sample_normal(mu=mu_x, sigma=sigma_x, node_mask=node_mask, 
+                                    fix_noise=fix_noise, com_free=self.com_free)
 
         x = xh[:, :, :self.n_dims]
 
@@ -822,7 +841,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         """
         Computes the loss (type l2 or NLL) if training. And if eval then always computes NLL.
         """
-        # Normalize data, take into account volume change in x. - NOTE
+        # Normalize data, take into account volume change in x. - NOTE: keep scale=1 for x for the 2D example
         x, h, delta_log_px = self.normalize(x, h, node_mask)
 
         # Reset delta_log_px if not vlb objective.
@@ -847,7 +866,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         return neg_log_pxh
 
-    def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False, remove_noise=False):
+    def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False, 
+                             remove_noise=False, model="model", x0=None):
         """Samples from zs ~ p(zs | zt). Only used during sampling."""
         gamma_s = self.gamma(s)  # [bs, 1]
         gamma_t = self.gamma(t)
@@ -860,7 +880,77 @@ class EnVariationalDiffusion(torch.nn.Module):
         sigma_t = self.sigma(gamma_t, target_tensor=zt)
 
         # Neural net prediction.
-        eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+        if model == "model":
+            eps_t = self.phi(zt, t, node_mask, edge_mask, context)
+        elif model == "backbone":
+            x = zt[:, :, :self.n_dims]
+            h = zt[:, :, self.n_dims:]
+            eps_t = self.dynamics.k(t, x, h, node_mask)
+            if self.com_free:
+                eps_t = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(eps_t[:, :, :self.n_dims], 
+                                                           node_mask),
+                     eps_t[:, :, self.n_dims:]], dim=-1
+                )
+
+        # Compute mu for p(zs | zt).
+        if self.com_free:
+            diffusion_utils.assert_mean_zero_with_mask(zt[:, :, :self.n_dims], node_mask)
+            diffusion_utils.assert_mean_zero_with_mask(eps_t[:, :, :self.n_dims], node_mask)
+
+        if x0 is None:
+            mu = zt / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t
+        else:
+            # compute q(x_{t-1}|x_t, x_0)
+            diffusion_utils.assert_mean_zero_with_mask(x0)
+            alpha_s = self.alpha(gamma_s, target_tensor=zt)
+            mu = zt * (alpha_t_given_s * sigma_s**2) / sigma_t**2 +\
+                 x0 * (alpha_s * sigma2_t_given_s) / sigma_t**2
+
+        # Compute sigma for p(zs | zt).
+        sigma = sigma_t_given_s * sigma_s / sigma_t
+
+        # Sample zs given the paramters derived from zt.
+        if remove_noise:
+            if self.com_free:
+                # Project down to avoid numerical runaway of the center of gravity.
+                mu = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(mu[:, :, :self.n_dims],
+                                                           node_mask),
+                    mu[:, :, self.n_dims:]], dim=2
+                )
+            return mu, sigma
+        else:
+            zs = self.sample_normal(mu, sigma, node_mask, fix_noise, com_free=self.com_free)
+
+            if self.com_free:
+                # Project down to avoid numerical runaway of the center of gravity.
+                zs = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(zs[:, :, :self.n_dims],
+                                                           node_mask),
+                    zs[:, :, self.n_dims:]], dim=2
+                )
+
+            return zs
+        
+    def sample_p_zs_given_zt_backbone(self, s, t, zt, node_mask, fix_noise=False, remove_noise=False):
+        """Samples from zs ~ p(zs | zt). Only used during sampling."""
+        gamma_s = self.gamma(s)  # [bs, 1]
+        gamma_t = self.gamma(t)
+
+        # [bs, 1, 1]
+        sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
+            self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, zt)
+
+        sigma_s = self.sigma(gamma_s, target_tensor=zt)
+        sigma_t = self.sigma(gamma_t, target_tensor=zt)
+
+        # Neural net prediction.
+
+        x = zt[:, :, :self.n_dims]
+        h = zt[:, :, self.n_dims:]
+
+        eps_t = self.dynamics.k(t, x, h, node_mask)
 
         # Compute mu for p(zs | zt).
         if self.com_free:
@@ -874,6 +964,13 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Sample zs given the paramters derived from zt.
         if remove_noise:
+            if self.com_free:
+                # Project down to avoid numerical runaway of the center of gravity.
+                mu = torch.cat(
+                    [diffusion_utils.remove_mean_with_mask(mu[:, :, :self.n_dims],
+                                                           node_mask),
+                    mu[:, :, self.n_dims:]], dim=2
+                )
             return mu, sigma
         else:
             zs = self.sample_normal(mu, sigma, node_mask, fix_noise, com_free=self.com_free)

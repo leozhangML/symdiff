@@ -10,6 +10,7 @@ matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
 from qm9.models import get_model
+from train_test import test
 from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask, assert_correctly_masked
 
 from sym_nn.distributions import retrieve_dataloaders
@@ -21,7 +22,7 @@ def save_fig(args, fig):
     fig_name = "_".join([dt, args.exp_name, args.dataset])
     fig_name = fig_name + ".png"
     fig_path = os.path.join(
-        args.fig_path, fig_name
+        args.fig_folder_path, fig_name
     )
     fig.savefig(fig_path)
     plt.close()
@@ -422,6 +423,7 @@ def main():
     
     parser = argparse.ArgumentParser(description='eval_toy_experiment')
     parser.add_argument('--model_path', type=str, default="")
+    parser.add_argument('--plots_path', type=str, default="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots")
     parser.add_argument('--n_samples', type=int, default=100)
 
     parser.add_argument('--visualise_data', action="store_true")
@@ -433,23 +435,35 @@ def main():
     parser.add_argument('--visualise_gamma_hist', action="store_true")
 
     parser.add_argument('--visualise_stoc_eq', action="store_true")
-    
 
+    parser.add_argument('--model_equivariance_metric', action="store_true")
+    parser.add_argument('--n_importance_samples', type=int, default=10)
+    
     eval_args = parser.parse_args()
 
     with open(os.path.join(eval_args.model_path, 'args.pickle'), 'rb') as f:
         args = pickle.load(f)
 
     args.resample_toy_data = False  # to ensure we use the same dataset as training
-    args.datatime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # for saving plots etc.
-    args.fig_path = "/data/ziz/not-backed-up/lezhang/projects/symdiff/plots"
+
+    # create folder for saving plots
+    fig_folder_datatime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    fig_folder_name = "_".join([fig_folder_datatime, args.exp_name, args.dataset])
+    args.fig_folder_path = os.path.join(eval_args.plots_path, fig_folder_name)
+    try:
+        os.makedirs(args.fig_folder_path)
+    except OSError:
+        pass
+
+    args.use_equivariance_metric = True
+    args.n_importance_samples = eval_args.n_importance_samples
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
     dtype = torch.float32
 
-    # load saved model and datasets
+    # load saved model
     generative_model, _, _ = get_model(args, device, None, None)
     generative_model.to(device)
     print(f"\nLoaded model from: {eval_args.model_path}\n")
@@ -459,6 +473,7 @@ def main():
     generative_model.load_state_dict(flow_state_dict)
     generative_model.eval()
 
+    # load datasets
     dataloaders = retrieve_dataloaders(args)
     iter_train_dataloader = iter(dataloaders["train"])
     iter_val_dataloader = iter(dataloaders["valid"])
@@ -500,20 +515,26 @@ def main():
 
     # plot gamma distribution
     if eval_args.visualise_gamma_hist:
-        print("\nplotting histogram of gamma\n")
+        print("\nplotting histogram of gamma")
         plot_gamma_hist(args, iter_val_dataloader, generative_model, n=1000)
         check_stoc_equivariance_gamma_hist(args, iter_val_dataloader, generative_model, n=1000, use_model=False)
 
     # check stochastic equivariance
     if eval_args.visualise_stoc_eq:
-        print("\nplotting stochastic equivariance")
+        print("\nplotting stochastic equivariance\n")
         check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=2000)  # check equivariance of symdiff
         check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=10, use_gamma=False)  # check equivariance of k
         check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=5000, use_gamma=True, plot_gamma=True)  # check equivariance of gamma
 
-    # need to implement equivariance metrics, and k with gaussian noise
+    if eval_args.model_equivariance_metric:
+        print("\ncomputing model equivariance metric")
+        nll, model_metric, backbone_metric = test(args, dataloaders["valid"], 0, generative_model, device, dtype, 
+                           None, None, partition='Valid')
+        print(f"\nmodel metric: {model_metric}, backbone metric: {backbone_metric}")
 
     # check if the gaussian noise is being used, 
+
+    # need to finish metrics for the backbone and add t=0
 
 if __name__ == "__main__":
     main()
