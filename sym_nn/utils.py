@@ -242,7 +242,9 @@ def iwae_nll_0(args, xh, xh_0, eps, node_mask, eval_model, n_importance_samples)
         repeated_xh_0[:, :, :args.n_dims], repeated_node_mask
     ).reshape(-1, n_importance_samples)
 
-    return -torch.logsumexp(log_probs+log_probs_constants, dim=-1) - np.log(n_importance_samples)  # [bs]
+    iwae = torch.logsumexp(log_probs+log_probs_constants, dim=-1) - np.log(n_importance_samples)  # [bs]
+
+    return -iwae
 
 def iwae_equivariance(args, s, xh_s, t, xh_t, node_mask, eval_model, n_importance_samples, 
                       sample_t0=False, use_xh=False):
