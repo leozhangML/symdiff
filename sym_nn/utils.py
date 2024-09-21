@@ -354,7 +354,7 @@ def get_params_p_zs_given_zt(args, s, t, xh_t, node_mask, eval_model, model="mod
         if dgg_model:
             eps_t = eval_model.dynamics.k_backbone(t, x, h, node_mask)
         else:
-            eps_t = eval_model.dynamics.k(t, x, h, node_mask)
+            eps_t = eval_model.dynamics(t, x, h, node_mask)
 
         if args.com_free:
             eps_t = torch.cat(
@@ -402,7 +402,7 @@ def get_params_p_x_given_z0(args, xh_0, node_mask, eval_model, model="model"):
         if dgg_model:
             net_out = eval_model.dynamics.k_backbone(zeros, x, h, node_mask)
         else:
-            net_out = eval_model.dynamics.k(zeros, x, h, node_mask)
+            net_out = eval_model.dynamics(zeros, x, h, node_mask)
     else:
         raise ValueError
 
