@@ -324,6 +324,10 @@ parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which 
 # Data aug at sampling
 parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
 
+# Arguments for equivariance metrics
+parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
+parser.add_argument("--n_importance_samples", type=int, default=10, help="whether to log the equivariance metrics")
+
 
 # Getting the dataset
 args = parser.parse_args()
@@ -512,10 +516,10 @@ def main():
                 mol_stable = validity_dict["mol_stable"]
             
             # Compute average nll over the val/test set
-            nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
+            nll_val, model_metric_val, backbone_metric_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
                            partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
                            property_norms=property_norms)
-            nll_test = test(args=args, loader=dataloaders['test'], epoch=epoch, eval_model=model_ema_dp,
+            nll_test, model_metric_test, backbone_metric_test = test(args=args, loader=dataloaders['test'], epoch=epoch, eval_model=model_ema_dp,
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
@@ -571,6 +575,12 @@ def main():
             wandb.log({"Val loss ": nll_val}, commit=True)
             wandb.log({"Test loss ": nll_test}, commit=True)
             wandb.log({"Best cross-validated test loss ": best_nll_test}, commit=True)
+
+            if args.use_equivariance_metric:
+                wandb.log({"Val model equivariance metric ": model_metric_val}, commit=True)
+                wandb.log({"Val backbone equivariance metric ": backbone_metric_val}, commit=True)
+                wandb.log({"Test model equivariance metric ": model_metric_test}, commit=True)
+                wandb.log({"Test backbone equivariance metric ": backbone_metric_test}, commit=True)            
 
 
 if __name__ == "__main__":

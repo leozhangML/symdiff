@@ -11,6 +11,9 @@ from qm9 import losses
 import time
 import torch
 
+from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone, compute_iwae_nll
+
+
 from tqdm import tqdm
 
 
@@ -130,6 +133,8 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
         nll_epoch = 0
         n_samples = 0
 
+        model_metric_epoch = 0
+        backbone_metric_epoch = 0
         n_iterations = len(loader)
 
         for i, data in enumerate(loader):
@@ -164,13 +169,23 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                                                     node_mask, edge_mask, context)
             # standard nll from forward KL
 
+            if args.use_equivariance_metric:
+                model_metric = compute_equivariance_metrics_model(args, x, h, node_mask, eval_model, args.n_importance_samples)
+                backbone_metric = compute_equivariance_metrics_backbone(args, x, h, node_mask, eval_model)
+                model_metric_epoch += model_metric * batch_size
+                backbone_metric_epoch += backbone_metric * batch_size
+
+
             nll_epoch += nll.item() * batch_size  # converts mean to sum
             n_samples += batch_size
             if i % args.n_report_steps == 0:
                 print(f"\r {partition} NLL \t epoch: {epoch}, iter: {i}/{n_iterations}, "
                       f"NLL: {nll_epoch/n_samples:.2f}")
+                if args.use_equivariance_metric:
+                    print(f"model equivariance metric: {model_metric_epoch/n_samples}, \
+                          backbone equivariance metric: {backbone_metric_epoch/n_samples}")                      
 
-    return nll_epoch/n_samples
+    return nll_epoch/n_samples, model_metric_epoch/n_samples, backbone_metric_epoch/n_samples
 
 
 def save_and_sample_chain(model, args, device, dataset_info, prop_dist,
