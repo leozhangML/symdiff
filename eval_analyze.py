@@ -149,7 +149,7 @@ def main():
         print("mlp_type not found!")
         args.mlp_type = 'mlp'
 
-    args.suffix = su
+    args.suffix_save = eval_args.suffix_save
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
@@ -207,7 +207,7 @@ def main():
     print(f'Final test nll {test_nll}')
 
     print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
-    if args.suffix is not None:
+    if args.suffix_save is not None:
         with open(join(eval_args.model_path, f'eval_log_{suffix}.txt'), 'w') as f:
             print(f'Overview: val nll {val_nll} test nll {test_nll}',
                 stability_dict,
