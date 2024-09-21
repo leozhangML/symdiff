@@ -11,7 +11,7 @@ from qm9 import losses
 import time
 import torch
 
-from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone, compute_iwae_nll
+from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone
 
 
 from tqdm import tqdm
