@@ -326,7 +326,7 @@ parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether
 
 # Arguments for equivariance metrics
 parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
-parser.add_argument("--n_importance_samples", type=int, default=10, help="whether to log the equivariance metrics")
+parser.add_argument("--n_importance_samples", type=int, default=32, help="whether to log the equivariance metrics")
 parser.add_argument('--n_dims', type=int, default=3)
 
 
