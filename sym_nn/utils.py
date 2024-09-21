@@ -402,7 +402,7 @@ def get_params_p_x_given_z0(args, xh_0, node_mask, eval_model, model="model"):
         if dgg_model:
             net_out = eval_model.dynamics.k_backbone(zeros, x, h, node_mask)
         else:
-            net_out = eval_model.dynamics._forward(zeros, x, h, node_mask)
+            net_out = eval_model.dynamics._forward(zeros, xh_0, node_mask, None, None)
     else:
         raise ValueError
 
