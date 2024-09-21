@@ -1,0 +1,13 @@
+SLURM_JOBID:  2271631
+Fri 20 Sep 20:06:01 UTC 2024
+/data/zizgpu04/not-backed-up/ashouritaklimi/symdiff
+Not importing rdkit functions.
+Traceback (most recent call last):
+  File "/data/localhost/not-backed-up/ashouritaklimi/symdiff/eval_analyze.py", line 214, in <module>
+    main()
+  File "/data/localhost/not-backed-up/ashouritaklimi/symdiff/eval_analyze.py", line 134, in main
+    with open(join(eval_args.model_path, 'args.pickle'), 'rb') as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'outputs/qm9_best_dg_lr_1e_4_backbone_seed_0/args.pickle'
+Fri 20 Sep 20:06:14 UTC 2024
+Job completed.

@@ -126,6 +126,8 @@ def main():
                         help="Use if trained on a different node")
     parser.add_argument('--data_aug_at_sampling', type=eval, default=False,
                         help='Whether we should apply data augmentation for sampling')                        
+    parser.add_argument("--suffix_save", type=str, default=None, 
+                        help="Suffix for eval_logs")
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -147,6 +149,7 @@ def main():
         print("mlp_type not found!")
         args.mlp_type = 'mlp'
 
+    args.suffix = su
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
@@ -204,10 +207,15 @@ def main():
     print(f'Final test nll {test_nll}')
 
     print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
-    with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
-        print(f'Overview: val nll {val_nll} test nll {test_nll}',
-              stability_dict,
-              file=f)
+    if args.suffix is not None:
+        with open(join(eval_args.model_path, f'eval_log_{suffix}.txt'), 'w') as f:
+            print(f'Overview: val nll {val_nll} test nll {test_nll}',
+                stability_dict,
+                file=f)    else:
+        with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
+            print(f'Overview: val nll {val_nll} test nll {test_nll}',
+                stability_dict,
+                file=f)
 
 
 if __name__ == "__main__":
