@@ -2075,6 +2075,36 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.pos_embedder.apply(_basic_init)
         self.gamma_dec.apply(_basic_init)
 
+    def k_backbone(self, t, x, h, node_mask):
+        bs, n_nodes, _ = x.shape
+        x = remove_mean_with_mask(x, node_mask)
+
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        if not self.use_separate_gauss_embs:
+            pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+            pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+        else:
+            raise NotImplementedError
+
+        xh = torch.cat([x, h], dim=-1)
+        xh = self.xh_embedder(xh)
+        if not self.use_separate_gauss_embs:
+            xh = torch.cat([xh, pos_emb], dim=-1) * node_mask
+        else:
+            raise NotImplementedError
+
+        xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
+        x = xh[:, :, :self.n_dims] 
+        h = xh[:, :, self.n_dims:]
+
+        if self.args.com_free:
+            x = remove_mean_with_mask(x, node_mask)  # k: U -> U
+        xh = torch.cat([x, h], dim=-1)
+        assert_correctly_masked(xh, node_mask)
+
+        return xh
+
+
     def forward(self):
         raise NotImplementedError
 
