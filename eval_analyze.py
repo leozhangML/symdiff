@@ -211,7 +211,8 @@ def main():
         with open(join(eval_args.model_path, f'eval_log_{suffix_save}.txt'), 'w') as f:
             print(f'Overview: val nll {val_nll} test nll {test_nll}',
                 stability_dict,
-                file=f)    else:
+                file=f)    
+    else:
         with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
             print(f'Overview: val nll {val_nll} test nll {test_nll}',
                 stability_dict,
