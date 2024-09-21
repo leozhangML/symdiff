@@ -208,7 +208,7 @@ def main():
 
     print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
     if args.suffix_save is not None:
-        with open(join(eval_args.model_path, f'eval_log_{suffix}.txt'), 'w') as f:
+        with open(join(eval_args.model_path, f'eval_log_{suffix_save}.txt'), 'w') as f:
             print(f'Overview: val nll {val_nll} test nll {test_nll}',
                 stability_dict,
                 file=f)    else:
