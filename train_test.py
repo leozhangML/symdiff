@@ -170,7 +170,11 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
             # standard nll from forward KL
 
             if args.use_equivariance_metric:
-                model_metric = compute_equivariance_metrics_model(args, x, h, node_mask, eval_model, args.n_importance_samples)
+                if args.model == "dit_dit_gaussian_dynamics":
+                    model_metric = compute_equivariance_metrics_model(args, x, h, node_mask, eval_model, args.n_importance_samples)
+                else:
+                    model_metric = 0
+                    
                 backbone_metric = compute_equivariance_metrics_backbone(args, x, h, node_mask, eval_model)
                 model_metric_epoch += model_metric * batch_size
                 backbone_metric_epoch += backbone_metric * batch_size
