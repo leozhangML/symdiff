@@ -354,7 +354,7 @@ def get_params_p_zs_given_zt(args, s, t, xh_t, node_mask, eval_model, model="mod
         if dgg_model:
             eps_t = eval_model.dynamics.k_backbone(t, x, h, node_mask)
         else:
-            eps_t = eval_model.dynamics(t, x, h, node_mask)
+            eps_t = eval_model.dynamics(t, xh_t, node_mask, None, None)
 
         if args.com_free:
             eps_t = torch.cat(
