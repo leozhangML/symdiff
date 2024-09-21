@@ -343,14 +343,19 @@ def get_params_p_zs_given_zt(args, s, t, xh_t, node_mask, eval_model, model="mod
         _, sigma_t, _, _ = get_q_posterior_constants(
             s, t, eval_model, target_tensor=xh_t)
 
-    if model == "model":
+    dgg_model = args.model == "dit_dit_gaussian_dynamics"
+
+    if model == "model" and dgg_model:
         eps_t = eval_model.phi(xh_t, t, node_mask, None, None)    
     elif model == "backbone":
         x = xh_t[:, :, :args.n_dims]
         h = xh_t[:, :, args.n_dims:]
-        print("Shapes in get_params_p_zs_given_zt")
-        print(t.shape, x.shape, h.shape)
-        eps_t = eval_model.dynamics.k_backbone(t, x, h, node_mask)
+
+        if dgg_model:
+            eps_t = eval_model.dynamics.k_backbone(t, x, h, node_mask)
+        else:
+            eps_t = eval_model.dynamics.k(t, x, h, node_mask)
+
         if args.com_free:
             eps_t = torch.cat(
                 [remove_mean_with_mask(eps_t[:, :, :args.n_dims], 
@@ -381,6 +386,7 @@ def get_params_p_x_given_z0(args, xh_0, node_mask, eval_model, model="model"):
 
     zeros = torch.zeros(len(xh_0), 1, device=xh_0.device)
     gamma_0 = eval_model.gamma(zeros)  # [bs, 1]
+    dgg_model = args.model == "dit_dit_gaussian_dynamics"
 
     # Computes sqrt(sigma_0^2 / alpha_0^2)
     if args.com_free:
@@ -388,12 +394,15 @@ def get_params_p_x_given_z0(args, xh_0, node_mask, eval_model, model="model"):
     else:
         sigma = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
 
-    if model == "model":
+    if model == "model" and dgg_model:
         net_out = eval_model.phi(xh_0, zeros, node_mask, None, None)  # [bs, n_nodes, dims]
     elif model == "backbone":
         x = xh_0[:, :, :args.n_dims]
         h = xh_0[:, :, args.n_dims:]
-        net_out = eval_model.dynamics.k_backbone(zeros, x, h, node_mask)
+        if dgg_model:
+            net_out = eval_model.dynamics.k_backbone(zeros, x, h, node_mask)
+        else:
+            net_out = eval_model.dynamics.k(zeros, x, h, node_mask)
     else:
         raise ValueError
 
