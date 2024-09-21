@@ -348,6 +348,8 @@ def get_params_p_zs_given_zt(args, s, t, xh_t, node_mask, eval_model, model="mod
     elif model == "backbone":
         x = xh_t[:, :, :args.n_dims]
         h = xh_t[:, :, args.n_dims:]
+        print("Shapes in get_params_p_zs_given_zt")
+        print(t.shape, x.shape, h.shape)
         eps_t = eval_model.dynamics.k(t, x, h, node_mask)
         if args.com_free:
             eps_t = torch.cat(
