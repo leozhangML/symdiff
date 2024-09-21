@@ -124,6 +124,12 @@ def main():
                         help='Should save samples to xyz files.')
     parser.add_argument("--datadir", type=str, default=None, 
                         help="Use if trained on a different node")
+    
+    parser.add_argument("--skip_chemical_metrics", action="store_true")
+
+    parser.add_argument("--return_iwae_nll", action="store_true")
+    parser.add_argument('--n_importance_samples', type=int, default=10)
+
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -187,18 +193,20 @@ def main():
     flow_state_dict = torch.load(join(eval_args.model_path, fn), map_location=device)
     generative_model.load_state_dict(flow_state_dict)
 
-    # Analyze stability, validity, uniqueness and novelty with nodes_dist
-    stability_dict, rdkit_metrics = analyze_and_save(
-        args, eval_args, device, generative_model, nodes_dist,
-        prop_dist, dataset_info, n_samples=eval_args.n_samples,
-        batch_size=eval_args.batch_size_gen, save_to_xyz=eval_args.save_to_xyz)
-    print(stability_dict)
+    if eval_args.skip_chemical_metrics:
 
-    if rdkit_metrics is not None:
-        rdkit_metrics = rdkit_metrics[0]
-        print("Validity %.4f, Uniqueness: %.4f, Novelty: %.4f" % (rdkit_metrics[0], rdkit_metrics[1], rdkit_metrics[2]))
-    else:
-        print("Install rdkit roolkit to obtain Validity, Uniqueness, Novelty")
+        # Analyze stability, validity, uniqueness and novelty with nodes_dist
+        stability_dict, rdkit_metrics = analyze_and_save(
+            args, eval_args, device, generative_model, nodes_dist,
+            prop_dist, dataset_info, n_samples=eval_args.n_samples,
+            batch_size=eval_args.batch_size_gen, save_to_xyz=eval_args.save_to_xyz)
+        print(stability_dict)
+
+        if rdkit_metrics is not None:
+            rdkit_metrics = rdkit_metrics[0]
+            print("Validity %.4f, Uniqueness: %.4f, Novelty: %.4f" % (rdkit_metrics[0], rdkit_metrics[1], rdkit_metrics[2]))
+        else:
+            print("Install rdkit roolkit to obtain Validity, Uniqueness, Novelty")
 
     # In GEOM-Drugs the validation partition is named 'val', not 'valid'.
     if args.dataset == 'geom':
@@ -208,19 +216,30 @@ def main():
         val_name = 'valid'
         num_passes = 5
 
+    if eval_args.return_iwae_nll:
+        args.return_iwae_nll = True
+        args.n_importance_samples = eval_args.n_importance_samples
+
+    if eval_args.model_equivariance_metric:
+        args.model_equivariance_metric = True
+
     # Evaluate negative log-likelihood for the validation and test partitions
-    val_nll = test(args, generative_model, nodes_dist, device, dtype,
+    val_nll, val_model_metric, val_backbone_metric, val_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
                    dataloaders[val_name],
                    partition='Val')
     print(f'Final val nll {val_nll}')
-    test_nll = test(args, generative_model, nodes_dist, device, dtype,
+    test_nll, test_model_metric, test_backbone_metric, test_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
                     dataloaders['test'],
                     partition='Test', num_passes=num_passes)
     print(f'Final test nll {test_nll}')
 
     print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
+    print(f"(Val) model metric: {val_model_metric}, backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}")
+    print(f"(Test) model metric: {test_model_metric}, backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}")
     with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
-        print(f'Overview: val nll {val_nll} test nll {test_nll}',
+        print(f'Overview: val nll {val_nll}, test nll {test_nll}, (Val) model metric: {val_model_metric}, \
+              backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}, (Test) model metric: {test_model_metric}, \
+                backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}',
               stability_dict,
               file=f)
 

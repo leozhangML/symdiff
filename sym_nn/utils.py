@@ -3,7 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from equivariant_diffusion.utils import assert_correctly_masked, assert_mean_zero_with_mask
+from equivariant_diffusion.utils import assert_correctly_masked, assert_mean_zero_with_mask, \
+                                        remove_mean_with_mask
 
 
 def qr(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -205,9 +206,9 @@ def compute_normal_log_probs(sample, mu, sigma, node_mask, eval_model, use_xh=Fa
     # return log_prob of Gaussian
     # sample: [bs, n_nodes, dims]
     assert_correctly_masked(mu, node_mask)
-    assert_mean_zero_with_mask(mu, node_mask)
+    assert_mean_zero_with_mask(mu[:, :, :eval_model.n_dims], node_mask)
     assert_correctly_masked(sample, node_mask)
-    assert_mean_zero_with_mask(sample, node_mask)   
+    assert_mean_zero_with_mask(sample[:, :, :eval_model.n_dims], node_mask)
     number_of_nodes = torch.sum(node_mask.squeeze(2), dim=1)
     eff_n_nodes = number_of_nodes - 1 if eval_model.com_free else number_of_nodes
     if use_xh and eval_model.molecule:
@@ -227,12 +228,20 @@ def iwae_nll_0(args, xh, xh_0, eps, node_mask, eval_model, n_importance_samples)
 
     _, repeated_eps, _ = batch_inputs(t_zeros, eps, node_mask, n_importance_samples)
     _, repeated_xh_0, _ = batch_inputs(t_zeros, xh_0, node_mask, n_importance_samples)
-    
+
     repeated_gamma_0 = eval_model.gamma(repeated_t_zeros).unsqueeze(-1)  # [bs*n_importance_samples, 1, 1]
-    repeated_h = repeated_xh[:, :, args.n_dims:]
+    if args.molecule:
+        repeated_h_cat = repeated_xh[:, :, args.n_dims:-1]
+        repeated_h_int = repeated_xh[:, :, -1:] if eval_model.include_charges else torch.zeros(0, device=xh.device)
+        repeated_h = {"categorical": repeated_h_cat, "integer": repeated_h_int}
+    else:
+        # redundant
+        repeated_h = {"categorical": repeated_xh[:, :, args.n_dims:], "integer": torch.zeros(0, device=xh.device)}
+
     repeated_net_out = eval_model.phi(repeated_xh_0, repeated_t_zeros, 
                                       repeated_node_mask, None, None)
 
+    # computes log(p_\theta(x|z_0))
     log_probs = eval_model.log_pxh_given_z0_without_constants(
         None, repeated_h, repeated_xh_0, repeated_gamma_0, repeated_eps, 
         repeated_net_out, repeated_node_mask
@@ -246,6 +255,76 @@ def iwae_nll_0(args, xh, xh_0, eps, node_mask, eval_model, n_importance_samples)
 
     return -iwae
 
+def get_params_p_zs_given_zt(args, s, t, xh_t, node_mask, eval_model, model="model"):
+
+    sigma_q, sigma2_t_given_s, _, alpha_t_given_s, \
+        _, sigma_t, _, _ = get_q_posterior_constants(
+            s, t, eval_model, target_tensor=xh_t)
+
+    if model == "model":
+        eps_t = eval_model.phi(xh_t, t, node_mask, None, None)    
+    elif model == "backbone":
+        x = xh_t[:, :, :args.n_dims]
+        h = xh_t[:, :, args.n_dims:]
+        eps_t = eval_model.dynamics.k(t, x, h, node_mask)
+        if args.com_free:
+            eps_t = torch.cat(
+                [remove_mean_with_mask(eps_t[:, :, :args.n_dims], 
+                                       node_mask),
+                eps_t[:, :, args.n_dims:]], dim=-1
+            )
+    else:
+        raise ValueError
+
+    if args.com_free:
+        assert_mean_zero_with_mask(xh_t[:, :, :args.n_dims], node_mask)
+        assert_mean_zero_with_mask(eps_t[:, :, :args.n_dims], node_mask)
+
+    mu = xh_t / alpha_t_given_s - (sigma2_t_given_s / alpha_t_given_s / sigma_t) * eps_t
+
+    if args.com_free:
+        # Project down to avoid numerical runaway of the center of gravity.
+        mu = torch.cat(
+            [remove_mean_with_mask(mu[:, :, :args.n_dims],
+                                   node_mask),
+            mu[:, :, args.n_dims:]], dim=2
+        )
+    
+    return mu, sigma_q
+
+def get_params_p_x_given_z0(args, xh_0, node_mask, eval_model, model="model"):
+    # returns x, h but only x is used later
+
+    zeros = torch.zeros(len(xh_0), 1, device=xh_0.device)
+    gamma_0 = eval_model.gamma(zeros)  # [bs, 1]
+
+    # Computes sqrt(sigma_0^2 / alpha_0^2)
+    if args.com_free:
+        sigma = eval_model.SNR(-0.5 * gamma_0).unsqueeze(1)  # [bs, 1]
+    else:
+        sigma = torch.exp(0.5 * gamma_0[1]).unsqueeze(1)
+
+    if model == "model":
+        net_out = eval_model.phi(xh_0, zeros, node_mask, None, None)  # [bs, n_nodes, dims]
+    elif model == "backbone":
+        x = xh_0[:, :, :args.n_dims]
+        h = xh_0[:, :, args.n_dims:]
+        net_out = eval_model.dynamics.k(zeros, x, h, node_mask)
+    else:
+        raise ValueError
+
+    mu = eval_model.compute_x_pred(net_out, xh_0, gamma_0)
+
+    if args.com_free:
+        # Project down to avoid numerical runaway of the center of gravity.
+        mu = torch.cat(
+            [remove_mean_with_mask(mu[:, :, :args.n_dims],
+                                   node_mask),
+            mu[:, :, args.n_dims:]], dim=2
+        )
+
+    return mu, sigma  # [bs, n_nodes, dims]
+
 def iwae_equivariance(args, s, xh_s, t, xh_t, node_mask, eval_model, n_importance_samples, 
                       sample_t0=False, use_xh=False):
     # compute iwae estimate of the full model equivariance
@@ -258,22 +337,24 @@ def iwae_equivariance(args, s, xh_s, t, xh_t, node_mask, eval_model, n_importanc
 
     # [bs*n_importance_samples, n_nodes, dims], [bs*n_importance_samples, 1, 1]
     if sample_t0:
-        mu, sigma = eval_model.sample_p_xh_given_z0(
-            repeated_xh_t, repeated_node_mask, None, None,  
-            remove_noise=True)
+        # note that we just want the x component to measure equivariance
+        mu, sigma = get_params_p_x_given_z0(
+            args, repeated_xh_t, repeated_node_mask, 
+            eval_model, model="model")
     else:
-        mu, sigma = eval_model.sample_p_zs_given_zt(
-            repeated_s, repeated_t, repeated_xh_t, 
-            repeated_node_mask, None, None, remove_noise=True)
+        mu, sigma = get_params_p_zs_given_zt(
+            args, repeated_s, repeated_t, repeated_xh_t, 
+            repeated_node_mask, eval_model, model="model")
 
     if use_xh:
+        # for t\ne0 nll components
         # [bs, n_importance_samples]
         log_probs = compute_normal_log_probs(
             repeated_xh_s, mu, sigma, repeated_node_mask, 
             eval_model, use_xh=True
         ).reshape(-1, n_importance_samples)
     else:
-        # [bs*n_importance_samples, n_nodes, 3]
+        # [bs*n_importance_samples, n_nodes, n_dims]
         repeated_x_s = repeated_xh_s[:, :, :args.n_dims]
         mu_x = mu[:, :, :args.n_dims]
 
@@ -336,15 +417,11 @@ def compute_equivariance_metrics_backbone(args, x, h, node_mask, eval_model):
     g_z_0 = apply_g(args, z_0, g)
 
     # [bs, n_nodes, dims], [bs, 1, 1]
-    mu_z_t, sigma_t = eval_model.sample_p_zs_given_zt(s, t, z_t, node_mask, None, None, 
-                                                      remove_noise=True, model="backbone")
-    mu_g_z_t, _ = eval_model.sample_p_zs_given_zt(s, t, g_z_t, node_mask, None, None, 
-                                                  remove_noise=True, model="backbone")
+    mu_z_t, sigma_t = get_params_p_zs_given_zt(args, s, t, z_t, node_mask, eval_model, model="backbone")
+    mu_g_z_t, _ = get_params_p_zs_given_zt(args, s, t, g_z_t, node_mask, eval_model, model="backbone")
 
-    mu_z_0, sigma_0 = eval_model.sample_p_xh_given_z0(z_0, node_mask, None, None, 
-                                                      remove_noise=True, model="backbone")
-    mu_g_z_0, _ = eval_model.sample_p_xh_given_z0(g_z_0, node_mask, None, None, 
-                                                  remove_noise=True, model="backbone")
+    mu_z_0, sigma_0 = get_params_p_x_given_z0(args, z_0, node_mask, eval_model, model="backbone")
+    mu_g_z_0, _ = get_params_p_x_given_z0(args, g_z_0, node_mask, eval_model, model="backbone")
 
     # [bs, n_nodes, n_dims]
     mu_x_t = mu_z_t[:, :, :args.n_dims]
@@ -361,6 +438,8 @@ def compute_equivariance_metrics_backbone(args, x, h, node_mask, eval_model):
 
     return metric.mean().item()
 
+"""IWAE Stuff (??)"""
+
 def compute_normal_entropy(args, sigma, node_mask, eval_model):
     # sigma: [bs, 1, 1]
     num_of_nodes = torch.sum(node_mask.squeeze(2), dim=1)  # [bs]
@@ -371,7 +450,52 @@ def compute_normal_entropy(args, sigma, node_mask, eval_model):
         d = eff_n_nodes * args.n_dims
     return d * (np.log(2*np.pi*np.e) + torch.log(sigma.reshape(-1)**2)) / 2  # [bs]
 
-def iwae_nll(args, x, h, node_mask, eval_model, n_importance_samples, nodes_dist=None):
+def get_q_posterior_constants(s, t, eval_model, target_tensor):
+    # gets constants for q(x_{t-1}|x_t, x_0)
+
+    gamma_s = eval_model.gamma(s)  # [bs, 1]
+    gamma_t = eval_model.gamma(t)
+
+    # [bs, 1, 1]
+    sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = \
+        eval_model.sigma_and_alpha_t_given_s(gamma_t, gamma_s, target_tensor)
+
+    sigma_s = eval_model.sigma(gamma_s, target_tensor=target_tensor)
+    sigma_t = eval_model.sigma(gamma_t, target_tensor=target_tensor)
+
+    alpha_s = eval_model.alpha(gamma_s, target_tensor=target_tensor) 
+    alpha_t = eval_model.alpha(gamma_t, target_tensor=target_tensor) 
+
+    # sigma for the posterior q
+    sigma_q = sigma_t_given_s * sigma_s / sigma_t
+
+    return sigma_q, sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s, \
+           sigma_s, sigma_t, alpha_s, alpha_t
+
+def sample_q_t_posterior_given_xh_0(args, s, t, z_t, xh_0, node_mask, eval_model):
+    # samples from q(x_{t-1}|x_t, x_0)
+
+    sigma_q, sigma2_t_given_s, _, alpha_t_given_s, \
+        sigma_s, sigma_t, alpha_s, _ = get_q_posterior_constants(
+            s, t, eval_model, target_tensor=z_t)
+
+    assert_mean_zero_with_mask(xh_0[:, :, :args.n_dims], node_mask)
+    mu = z_t * (alpha_t_given_s * sigma_s**2) / sigma_t**2 +\
+         xh_0 * (alpha_s * sigma2_t_given_s) / sigma_t**2  # check
+
+    z_s = eval_model.sample_normal(mu, sigma_q, node_mask, com_free=args.com_free)
+
+    if args.com_free:
+        # Project down to avoid numerical runaway of the center of gravity.
+        z_s = torch.cat(
+            [remove_mean_with_mask(z_s[:, :, :args.n_dims],
+                                   node_mask),
+            z_s[:, :, args.n_dims:]], dim=2
+        )
+
+    return z_s, mu, sigma_q
+
+def compute_iwae_nll(args, x, h, node_mask, eval_model, n_importance_samples, nodes_dist=None):
 
     x, h, delta_log_px = eval_model.normalize(x, h, node_mask)
 
@@ -381,21 +505,23 @@ def iwae_nll(args, x, h, node_mask, eval_model, n_importance_samples, nodes_dist
     z_t, s, t = add_noise(args, x, h, node_mask, eval_model, sample_t0=False) # [bs, n_nodes, dims], [bs, 1, 1], [bs, 1]
     z_0, eps = add_noise(args, x, h, node_mask, eval_model, sample_t0=True)
 
-    # compute prior term
+    # compute prior term - should be correct
     xh = convert_x_to_xh(args, x, h, eval_model)
     kl_prior = eval_model.kl_prior(xh, node_mask)  # [bs]
 
-    # compute terms for t \ne 0, x0 option is for q(x_{t-1}|x_t, x_0)
-    z_s = eval_model.sample_p_zs_given_zt(s, t, z_t, node_mask, 
-                                          None, None, x0=xh)
-    _, sigma_t = eval_model.sample_p_zs_given_zt(s, t, z_t, node_mask, None, 
-                                                 None, remove_noise=True, x0=xh)
+    # compute terms for t \ne 0
+    z_s, mu_t, sigma_t = sample_q_t_posterior_given_xh_0(args, s, t, z_t, xh, node_mask, eval_model)  # correct
 
     entropy_s_given_t = compute_normal_entropy(args, sigma_t, node_mask, eval_model)
-    iwae_z = iwae_equivariance(args, s, z_s, t, z_t, node_mask, eval_model, 
-                               n_importance_samples, sample_t0=False, use_xh=True)
+    #entropy_s_given_t = -compute_normal_log_probs(z_s[:, :, :args.n_dims], mu_t[:, :, :args.n_dims], sigma_t, node_mask, eval_model, use_xh=False) 
 
-    nll_t = entropy_s_given_t + iwae_z  # [bs]
+    assert_mean_zero_with_mask(z_s[:, :, :args.n_dims], node_mask)
+    assert_mean_zero_with_mask(z_t[:, :, :args.n_dims], node_mask)
+
+    iwae_z = iwae_equivariance(args, s, z_s, t, z_t, node_mask, eval_model, 
+                               n_importance_samples, sample_t0=False, use_xh=args.molecule)
+
+    nll_t = -entropy_s_given_t - iwae_z  # [bs]
 
     # compute terms for t=0
     nll_0 = iwae_nll_0(args, xh, z_0, eps, node_mask, eval_model, n_importance_samples)

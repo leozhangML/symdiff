@@ -11,7 +11,7 @@ from qm9 import losses
 import time
 import torch
 
-from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone
+from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone, compute_iwae_nll
 
 from tqdm import tqdm
 
@@ -27,7 +27,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
         edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
         one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
-        charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
+        charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1], torch.zeros(0) for 2D experiments
 
         x = remove_mean_with_mask(x, node_mask)
 
@@ -113,7 +113,7 @@ def check_mask_correct(variables, node_mask):
             assert_correctly_masked(variable, node_mask)
 
 
-def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_dist, partition='Test', equivariance_metric=None):
+def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_dist, partition='Test'):
     eval_model.eval()
     print(f"{partition} at epoch {epoch}")
     with torch.no_grad():
@@ -122,6 +122,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
 
         model_metric_epoch = 0
         backbone_metric_epoch = 0
+        iwae_nll_epoch = 0
 
         n_iterations = len(loader)
 
@@ -163,6 +164,10 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                 model_metric_epoch += model_metric * batch_size
                 backbone_metric_epoch += backbone_metric * batch_size
 
+            if args.return_iwae_nll:
+                iwae_nll = compute_iwae_nll(args, x, h, node_mask, eval_model, args.n_importance_samples, nodes_dist=nodes_dist)
+                iwae_nll_epoch += iwae_nll * batch_size
+
             nll_epoch += nll.item() * batch_size  # converts mean to sum
             n_samples += batch_size
             if i % args.n_report_steps == 0:
@@ -171,11 +176,10 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                 if args.use_equivariance_metric:
                     print(f"model equivariance metric: {model_metric_epoch/n_samples}, \
                           backbone equivariance metric: {backbone_metric_epoch/n_samples}")
+                if args.return_iwae_nll:
+                    print(f"iwae nll: {iwae_nll_epoch/n_samples}")
 
-    if args.use_equivariance_metric:
-        return nll_epoch/n_samples, model_metric_epoch/n_samples, backbone_metric_epoch/n_samples
-    else:
-        return nll_epoch/n_samples
+    return nll_epoch/n_samples, model_metric_epoch/n_samples, backbone_metric_epoch/n_samples, iwae_nll_epoch/n_samples
 
 
 def save_and_sample_chain(model, args, device, dataset_info, prop_dist,

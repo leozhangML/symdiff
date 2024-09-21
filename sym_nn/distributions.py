@@ -103,6 +103,7 @@ def retrieve_dataloaders(args):
         except OSError:
             pass
 
+        print("\nSaving toy datasets\n")
         torch.save(train_dataset, os.path.join(toy_dataset_path, "train.pt"))
         torch.save(val_dataset, os.path.join(toy_dataset_path, "valid.pt"))
         torch.save(test_dataset, os.path.join(toy_dataset_path, "test.pt"))

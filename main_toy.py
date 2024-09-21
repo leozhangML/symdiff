@@ -206,6 +206,7 @@ args = parser.parse_args()
 args.molecule = False
 args.n_dims = 2
 args.context_node_nf = 0
+args.return_iwae_nll = False
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")

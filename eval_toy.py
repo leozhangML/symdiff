@@ -16,6 +16,9 @@ from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_
 from sym_nn.distributions import retrieve_dataloaders
 from sym_nn.utils import orthogonal_haar
 
+import warnings
+warnings.filterwarnings("ignore")
+
 
 def save_fig(args, fig):
     dt = str(datetime.datetime.now())  # for saving plots etc.
@@ -437,7 +440,9 @@ def main():
     parser.add_argument('--visualise_stoc_eq', action="store_true")
 
     parser.add_argument('--model_equivariance_metric', action="store_true")
-    parser.add_argument('--n_importance_samples', type=int, default=10)
+    parser.add_argument('--n_importance_samples', type=int, default=1)
+
+    parser.add_argument('--return_iwae_nll', action="store_true")
     
     eval_args = parser.parse_args()
 
@@ -455,9 +460,6 @@ def main():
     except OSError:
         pass
 
-    args.use_equivariance_metric = True
-    args.n_importance_samples = eval_args.n_importance_samples
-
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
@@ -474,9 +476,14 @@ def main():
     generative_model.eval()
 
     # load datasets
+    #print("CHANGING BATCHSIZE")
+    #args.batch_size = 16
     dataloaders = retrieve_dataloaders(args)
     iter_train_dataloader = iter(dataloaders["train"])
     iter_val_dataloader = iter(dataloaders["valid"])
+
+    print(f"valid dataset has len={len(dataloaders['valid'].dataset.data["positions"])}")
+
 
     if eval_args.visualise_data:
         # visualise training dataset
@@ -527,14 +534,25 @@ def main():
         check_stoc_equivariance(args, iter_val_dataloader, generative_model, n=5000, use_gamma=True, plot_gamma=True)  # check equivariance of gamma
 
     if eval_args.model_equivariance_metric:
-        print("\ncomputing model equivariance metric")
-        nll, model_metric, backbone_metric = test(args, dataloaders["valid"], 0, generative_model, device, dtype, 
-                           None, None, partition='Valid')
+        print("\ncomputing model equivariance metric\n")
+        args.use_equivariance_metric = True
+        args.return_iwae_nll = False
+        args.n_importance_samples = eval_args.n_importance_samples
+        nll, model_metric, backbone_metric, _ = test(
+            args, dataloaders["valid"], 0, generative_model, 
+            device, dtype, None, None, partition='Valid')
         print(f"\nmodel metric: {model_metric}, backbone metric: {backbone_metric}")
 
-    # check if the gaussian noise is being used, 
+    if eval_args.return_iwae_nll:
+        print(f"\ncomputing iwae nll with n={eval_args.n_importance_samples}\n")
+        args.use_equivariance_metric = False
+        args.return_iwae_nll = True
+        args.n_importance_samples = eval_args.n_importance_samples
+        nll, _, _, iwae_nll = test(
+            args, dataloaders["valid"], 0, generative_model, device, 
+            dtype, None, None, partition="Valid")
+        print(f"\nnll: {nll}, iwae_nll: {iwae_nll}")
 
-    # need to finish metrics for the backbone and add t=0
 
 if __name__ == "__main__":
     main()
