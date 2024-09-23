@@ -319,6 +319,8 @@ parser.add_argument("--t_fourier", action="store_true", help="time config for tr
 ### Model parts to freeze for DIT DIT model  ####
 parser.add_argument("--freeze_model_parts", action="store_true", help="Whether to freeze the model parts")
 parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
+parser.add_argument("--path_to_load_backbone", type=str, default="", help="Path to load the backbone model from, if loading only the backbone")
+parser.add_argument("--type_backbone_to_load", type=str, default="", help="Whether to load the EMA backbone or the normal backbone: EMA or normal")
 
 
 # Data aug at sampling
@@ -440,6 +442,17 @@ def check_mask_correct(variables, node_mask):
 
 
 def main():
+
+    # Load the backbone model
+    if args.path_to_load_backbone != "":
+        print(f"Loading the backbone model from {args.path_to_load_backbone}")
+        backbone_flow_state_dict = torch.load(f"{args.path_to_load_backbone}/generative_model.npy")
+
+        # Load the flow state dict ONLY Into the backbone for the model, in particular into model.dynamics.k
+        model.dynamics.k.load_state_dict(backbone_flow_state_dict)
+
+
+
     if args.resume is not None:
         #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
         flow_state_dict = torch.load(join('outputs', args.resume, 'generative_model.npy'))  # for vdm
@@ -474,9 +487,16 @@ def main():
         model_ema = copy.deepcopy(model)
         ema = flow_utils.EMA(beta=args.ema_decay, use_separate_emas=args.use_separate_ema, k_beta=args.ema_decay_K, gamma_beta=args.ema_decay_gamma)
 
+        # Load the EMA backbone model
+        if args.path_to_load_backbone != "":
+            if args.type_backbone_to_load == "EMA":
+                print(f"Loading the EMA backbone model from {args.path_to_load_backbone}")
+                backbone_flow_state_dict = torch.load(f"{args.path_to_load_backbone}/generative_model_ema.npy")
+                model_ema.dynamics.k.load_state_dict(backbone_flow_state_dict)
+
         # NOTE: LEO
         if args.resume is not None:
-            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))
+            ema_state_dict = torch.load(join('outputs', args.resume, 'generative_model_ema.npy'))   # CHANGE
             model_ema.load_state_dict(ema_state_dict)
 
         if args.dp and torch.cuda.device_count() > 1:
