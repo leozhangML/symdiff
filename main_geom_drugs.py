@@ -227,16 +227,15 @@ parser.add_argument('--filter_molecule_size', type=int, default=None,
                     help="Only use molecules below this size.")
 parser.add_argument('--sequential', action='store_true',
                     help='Organize data by size to reduce average memory usage.')     # This is for GNNs, keep it off
-args = parser.parse_args()
 
 
 parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
-
-# Arguments for equivariance metrics
-# Arguments for equivariance metrics
 parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
 parser.add_argument("--n_importance_samples", type=int, default=32, help="whether to log the equivariance metrics")
 parser.add_argument('--n_dims', type=int, default=3)
+
+args = parser.parse_args()
+
 
 
 ##########################################################################################################################
@@ -308,8 +307,6 @@ if args.resume is not None:
 # Create folders
 utils.create_folders(args)
 print(args)
-print(args.use_equivariance_metric)
-break
 
 
 # Start wandb
