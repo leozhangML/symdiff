@@ -593,7 +593,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             # matrices = data_aug_utils.random_rotation(z0_x, output_matrix=True)
             # z0_x = data_aug_utils.random_rotation(z0_x, use_matrices=matrices)
             g = sym_nn_utils.orthogonal_haar(dim=3, target_tensor=z0_x)
-            z0_x = torch.bmm(z0_x, g.transpose(1, 2)) # transpose because of right action
+            z0_x = torch.bmm(z0_x, g)
             temp_z0 = torch.cat([z0_x, z0_h], dim=2)
             net_out = self.phi(temp_z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
 
@@ -607,7 +607,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             net_out_x = net_out[:, :, :3]
             net_out_h = net_out[:, :, 3:]
             # net_out_x = data_aug_utils.random_rotation(net_out_x, use_matrices=inverse_matrices).detach()
-            net_out_x = torch.bmm(net_out_x, g)  # don't transpose because of right action
+            net_out_x = torch.bmm(net_out_x, g.transpose(1, 2))
             net_out = torch.cat([net_out_x, net_out_h], dim=2)
         else:
             net_out = self.phi(z0, zeros, node_mask, edge_mask, context)  # [bs, n_nodes, dims]
@@ -875,7 +875,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             # matrices = data_aug_utils.random_rotation(zt_x, output_matrix=True)    # use orthogonal_haar to get the matrix # and then do the transpose with torch.bmm(zt_x, g)  
             # zt_x = data_aug_utils.random_rotation(zt_x, use_matrices=matrices)  # here we are applying the rotation matrix
             g = sym_nn_utils.orthogonal_haar(dim=3, target_tensor=zt_x)
-            zt_x = torch.bmm(zt_x, g.transpose(1, 2))  # transpose because of right action
+            zt_x = torch.bmm(zt_x, g)  
             temp_zt = torch.cat([zt_x, zt_h], dim=2)
             eps_t = self.phi(temp_zt, t, node_mask, edge_mask, context)
 
@@ -889,7 +889,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             eps_t_x = eps_t[:, :, :3]
             eps_t_h = eps_t[:, :, 3:]
             # eps_t_x = data_aug_utils.random_rotation(eps_t_x, use_matrices=inverse_matrices).detach()
-            eps_t_x = torch.bmm(eps_t_x, g)  # don't transpose because of right action
+            eps_t_x = torch.bmm(eps_t_x, g.transpose(1, 2))
             eps_t = torch.cat([eps_t_x, eps_t_h], dim=2)
         else:
             eps_t = self.phi(zt, t, node_mask, edge_mask, context)
