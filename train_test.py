@@ -12,6 +12,7 @@ import time
 import torch
 
 from sym_nn.utils import compute_equivariance_metrics_model, compute_equivariance_metrics_backbone
+import sym_nn.utils as sym_nn_utils
 
 
 from tqdm import tqdm
@@ -39,7 +40,9 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
 
         x = remove_mean_with_mask(x, node_mask)  # applied twice?
         if args.data_augmentation:
-            x = utils.random_rotation(x).detach()
+            # x = utils.random_rotation(x).detach()
+            g = sym_nn_utils.orthogonal_haar(dim=3, target_tensor=x)
+            x = torch.bmm(x, g.transpose(1, 2))
 
         check_mask_correct([x, one_hot, charges], node_mask)
         assert_mean_zero_with_mask(x, node_mask)
