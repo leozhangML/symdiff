@@ -42,7 +42,7 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         if args.data_augmentation:
             # x = utils.random_rotation(x).detach()
             g = sym_nn_utils.orthogonal_haar(dim=3, target_tensor=x)
-            x = torch.bmm(x, g)
+            x = torch.bmm(x, g).detach()
 
         check_mask_correct([x, one_hot, charges], node_mask)
         assert_mean_zero_with_mask(x, node_mask)
