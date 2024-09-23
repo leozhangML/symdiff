@@ -395,6 +395,7 @@ def get_model(args, device, dataset_info, dataloader_train):
             num_heads=args.num_heads,
             mlp_ratio=args.mlp_ratio,
             mlp_dropout=args.mlp_dropout,
+            mlp_type=args.mlp_type,
 
             n_dims=3,
             device=device
