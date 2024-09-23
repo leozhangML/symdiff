@@ -1859,6 +1859,7 @@ class DiTGaussian_dynamics(nn.Module):
         num_heads: int,
         mlp_ratio: float,
         mlp_dropout: float,
+        mlp_type: str,
 
         n_dims: int = 3,
         device: str = "cpu"
@@ -1874,7 +1875,8 @@ class DiTGaussian_dynamics(nn.Module):
             out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
             hidden_size=hidden_size, depth=depth, 
             num_heads=num_heads, mlp_ratio=mlp_ratio, 
-            use_fused_attn=True, x_emb="identity", mlp_dropout=mlp_dropout
+            use_fused_attn=True, x_emb="identity", mlp_dropout=mlp_dropout,
+            mlp_type=mlp_type
             )
 
         self.xh_embedder = nn.Linear(n_dims+in_node_nf+context_node_nf, xh_hidden_size)
