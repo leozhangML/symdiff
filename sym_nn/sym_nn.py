@@ -2027,6 +2027,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 out_features=n_dims**2
             ).to(device)
 
+            print("FOr the k this is our hidden size, depyh, mlp ratio and num heads")
+            print(hidden_size, depth, mlp_ratio, num_heads)
             self.k = DiT(
                 out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
                 hidden_size=hidden_size, depth=depth, 
@@ -2053,8 +2055,6 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 out_features=n_dims**2
             ).to(device)
 
-            print("FOr the k this is our hidden size, depyh, mlp ratio and num heads")
-            print(hidden_size, depth, mlp_ratio, num_heads)
             self.k = DiT(
                 out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
                 hidden_size=hidden_size, depth=depth, 
