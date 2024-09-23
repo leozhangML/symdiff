@@ -173,6 +173,7 @@ class DiTBlock(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         print("Size of mlp hidden", mlp_hidden_dim)
+        print("The type of our mlp i s", mlp_type)
 
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         if mlp_type == "mlp":
