@@ -173,7 +173,7 @@ class DiTBlock(nn.Module):
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         print("Size of mlp hidden", mlp_hidden_dim)
-        
+
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         if mlp_type == "mlp":
             self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=mlp_dropout)
@@ -183,6 +183,11 @@ class DiTBlock(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
+
+        # Prit the shape of m
+        print("MLP in DiT block")
+        print(self.mlp)
+
 
     def forward(self, x, c, attn_mask):
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.adaLN_modulation(c).chunk(6, dim=1)
