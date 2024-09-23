@@ -422,6 +422,8 @@ def get_model(args, device, dataset_info, dataloader_train):
 
     elif args.model == "dit_dit_gaussian_dynamics":
 
+        print("creating DiT_DitGaussian_dynamics model")
+
         net_dynamics = DiT_DitGaussian_dynamics(
             args,
             in_node_nf=in_node_nf,
@@ -616,6 +618,7 @@ def get_model(args, device, dataset_info, dataloader_train):
 
         # First check if args has a freeze_model_parts attribute
         if "freeze_model_parts" in args.__dict__:
+            print("Freezing model parts")
             if args.freeze_model_parts:
                 vdm = freeze_model_part(vdm, args.model_part_to_freeze)
 

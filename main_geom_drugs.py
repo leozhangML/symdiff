@@ -441,6 +441,10 @@ def main():
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
 
+            print("NLL VAL AND TEST")
+            print(nll_val, nll_test)
+
+
             # Save the model if it is the best model
             if nll_val < best_nll_val:
                 best_nll_val = nll_val

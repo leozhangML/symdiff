@@ -2010,7 +2010,9 @@ class DiT_DitGaussian_dynamics(nn.Module):
             self.gamma_enc_input_dim = n_dims + hidden_size-xh_hidden_size + noise_dims
 
         # Using separate dropout for gamma, and K
+        print("CReating the whole model")
         if not use_separate_dropout:
+            print("NOt using separate dropout")
             # enc_out_channels not used 
             self.gamma_enc = DiT(
                 out_channels=0, x_scale=0.0, 
@@ -2039,6 +2041,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 )
 
         else:
+            print("Using separate dropout")
             # enc_out_channels not used 
             self.gamma_enc = DiT(
                 out_channels=0, x_scale=0.0, 

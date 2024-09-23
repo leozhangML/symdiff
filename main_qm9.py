@@ -410,6 +410,7 @@ args.context_node_nf = context_node_nf
 # Create EGNN flow
 # vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
 # note that nodes_dist.sample is not filtered
+print("Getting model")
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
 if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
