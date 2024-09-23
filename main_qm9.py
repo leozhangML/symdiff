@@ -452,7 +452,6 @@ def main():
         model.dynamics.k.load_state_dict(backbone_flow_state_dict)
 
 
-
     if args.resume is not None:
         #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
         flow_state_dict = torch.load(join('outputs', args.resume, 'generative_model.npy'))  # for vdm
