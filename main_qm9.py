@@ -375,7 +375,7 @@ if args.resume is not None:
     print(args)
 
 utils.create_folders(args)
-# print(args)
+print(args)
 
 
 # TODO: COME BACK TO
