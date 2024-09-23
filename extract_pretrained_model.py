@@ -391,5 +391,5 @@ model.load_state_dict(flow_state_dict)
 
 # Save the model in model (i.e. model.model) in save_loc_folder as generative_model.pt
 save_loc = join(args.save_loc_folder, "generative_model.npy")
-utils.save_model(model.model, save_loc)
+utils.save_model(model.dynamics.model, save_loc)
 print(f"Model saved at {save_loc}")
