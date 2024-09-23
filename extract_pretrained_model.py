@@ -348,6 +348,7 @@ parser.add_argument('--save_loc_folder', type=str, default="The folder to save t
 
 # Getting the dataset
 args = parser.parse_args()
+print(args)
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
