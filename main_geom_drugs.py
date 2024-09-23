@@ -308,6 +308,8 @@ if args.resume is not None:
 # Create folders
 utils.create_folders(args)
 print(args)
+print(args.use_equivariance_metric)
+break
 
 
 # Start wandb
