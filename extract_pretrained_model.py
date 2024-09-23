@@ -344,7 +344,6 @@ parser.add_argument('--n_dims', type=int, default=3)
 # MY CODE
 ############################################################################################################
 parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian Dynamics model")
-parser.add_argument('--exp_name', type=str, default="Name of the experiment containign the model_loc")
 parser.add_argument('--save_loc_folder', type=str, default="The folder to save the extracted models")
 
 # Getting the dataset
@@ -385,8 +384,12 @@ if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 
+# Load the full model from model_loc
+flow_state_dict = torch.load(args.model_loc)
+model.load_state_dict(flow_state_dict)
+
 
 # Save the model in model (i.e. model.model) in save_loc_folder as generative_model.pt
-save_loc = join(args.save_loc_folder, "generative_model.pt")
+save_loc = join(args.save_loc_folder, "generative_model.npy")
 utils.save_model(model.model, save_loc)
 print(f"Model saved at {save_loc}")
