@@ -172,6 +172,8 @@ class DiTBlock(nn.Module):
         self.attn = Attention(hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs)
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
+        print("Size of mlp hidden", mlp_hidden_dim)
+        
         approx_gelu = lambda: nn.GELU(approximate="tanh")
         if mlp_type == "mlp":
             self.mlp = Mlp(in_features=hidden_size, hidden_features=mlp_hidden_dim, act_layer=approx_gelu, drop=mlp_dropout)

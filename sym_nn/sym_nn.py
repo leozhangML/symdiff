@@ -2065,7 +2065,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 mlp_dropout=dropout_k,
                 use_fused_attn=True, x_emb="identity",
                 mlp_type=mlp_type
-                )            
+                )
 
         self.device = device
 
