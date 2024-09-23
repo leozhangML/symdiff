@@ -617,9 +617,9 @@ def get_model(args, device, dataset_info, dataloader_train):
             )
 
         # First check if args has a freeze_model_parts attribute
-        if "freeze_model_parts" in args.__dict__:
-            print("Freezing model parts")
+        if "freeze_model_parts" in args.__dict__:            
             if args.freeze_model_parts:
+                print("Freezing model parts")
                 vdm = freeze_model_part(vdm, args.model_part_to_freeze)
 
         return vdm, nodes_dist, prop_dist
