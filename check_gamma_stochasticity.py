@@ -1,4 +1,12 @@
-# Rdkit import should be first, do not move it
+"""
+This is a script to extract the EMA and normal trained DiT model from a Dit_Gaussian_Dynamics model.
+
+
+The reason this is needed is because the normal saving of the model saves everything including the embeddings models
+for the main DiT model.
+"""
+
+
 try:
     from rdkit import Chem
     print("RDKit found and imported")
@@ -331,73 +339,46 @@ parser.add_argument("--use_equivariance_metric", action="store_true", help="whet
 parser.add_argument("--n_importance_samples", type=int, default=32, help="whether to log the equivariance metrics")
 parser.add_argument('--n_dims', type=int, default=3)
 
+############################################################################################################
+# NEW ARGS
+############################################################################################################
+parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian Dynamics model")
+parser.add_argument('--save_loc_folder', type=str, default="The folder to save the extracted models")
+
+
+# Arguments for stochasticiy
+parser.add_argument('--check_gamma_stochasticity', action='store_true', help='Check the stochasticity of gamma')
+parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
+
+############################################################################################################
+
+
+############################################################################################################
+# GET NORMAL MODEL AND DATASET
+############################################################################################################
 
 # Getting the dataset
 args = parser.parse_args()
+print(args)
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
 
+# If save_loc_folder does not exist, create it with the necessary subfolders
+if not os.path.exists(args.save_loc_folder):
+    os.makedirs(args.save_loc_folder, exist_ok=True)
+
+
+# Getting args
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
 dtype = torch.float32
-
-# Note that resume should be that path to the model that you want to resume from
-# And that experiment name should be the name of the experiment that you want to resume
-
-# If resuming, load the previous args and model
-if args.resume is not None:
-    exp_name = args.exp_name + '_resume'
-    start_epoch = args.start_epoch
-    resume = args.resume  # resume this dir
-    wandb_usr = args.wandb_usr
-    normalization_factor = args.normalization_factor
-    aggregation_method = args.aggregation_method
-    mlp_type = args.mlp_type  # LEO
-
-    with open(join(args.resume, 'args.pickle'), 'rb') as f:
-        args = pickle.load(f)
-
-    args.resume = resume
-    args.break_train_epoch = False
-
-    args.exp_name = exp_name  # new exp_name
-    args.start_epoch = start_epoch
-    args.wandb_usr = wandb_usr
-
-    # Careful with this -->
-    if not hasattr(args, 'normalization_factor'):
-        args.normalization_factor = normalization_factor
-    if not hasattr(args, 'aggregation_method'):
-        args.aggregation_method = aggregation_method
-    if not hasattr(args, 'mlp_type'):
-        print("mlp_type is not found!")
-        args.mlp_type = mlp_type
-
-    print(args)
-
-utils.create_folders(args)
-print(args)
-
-
-# TODO: COME BACK TO
-# Wandb config
-if args.no_wandb:
-    mode = 'disabled'
-else:
-    mode = 'online' if args.online else 'offline'
-# kwargs = {'entity': args.wandb_usr, 'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
-#          'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
-kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
-          'settings': wandb.Settings(_disable_stats=True), 'reinit': True, 'mode': mode}
-wandb.init(**kwargs)
-wandb.save('*.txt')
 
 # Retrieve QM9 dataloaders
 dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
 data_dummy = next(iter(dataloaders['train']))
 
-
+# Getting conditioning info
 if len(args.conditioning) > 0:
     print(f'Conditioning on {args.conditioning}')
     property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)  # compute mean, mad of each prop
@@ -409,203 +390,38 @@ else:
 
 args.context_node_nf = context_node_nf
 
-# Create EGNN flow
-# vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
-# note that nodes_dist.sample is not filtered
-print("Getting model")
+
+# Create the model (DiT Gaussian Dynamics)
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
 if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
 
-# Get optimiser or optimisers
-if args.use_separate_optimisers:
-    optim_K, optim_gamma = get_optim(args, model)
-    optim = None
-else:
-    optim = get_optim(args, model)
-    optim_K, optim_gamma = None, None
+# Load the full model from model_loc
+flow_state_dict = torch.load(args.model_loc)
+model.load_state_dict(flow_state_dict)
 
-if not args.use_separate_optimisers:
-    scheduler = get_scheduler(args, optim)
-else:
-    scheduler = None
-print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
-if args.print_parameter_count:
-    model.dynamics.print_parameter_count()
-
-gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
-gradnorm_queue.add(3000)  # Add large value that will be flushed.
+# Save the model in model (i.e. model.model) in save_loc_folder as generative_model.pt
+save_loc = join(args.save_loc_folder, "generative_model.npy")
+utils.save_model(model.dynamics.model, save_loc)
+print(f"Model saved at {save_loc}")
 
 
-def check_mask_correct(variables, node_mask):
-    for variable in variables:
-        if len(variable) > 0:
-            assert_correctly_masked(variable, node_mask)
+############################################################################################################
+# GET EMA MODEL
+############################################################################################################
+
+# Get the EMA model and save it
+
+# Create the model (DiT Gaussian Dynamics) again
+model_ema, _, _ = get_model(args, device, dataset_info, dataloaders['train'])
+if prop_dist is not None:  # when conditioning
+    prop_dist.set_normalizer(property_norms)
+model_ema = model_ema.to(device)
 
 
-def main():
+# Load the full model from model_loc - replace generative_model.npy with  generative_model_ema
+ema_state_dict = torch.load(args.model_loc.replace("generative_model.npy", "generative_model_ema.npy"))
+model_ema.load_state_dict(ema_state_dict)
 
-    # Load the backbone model
-    if args.path_to_load_backbone != "":
-        print(f"Loading the backbone model from {args.path_to_load_backbone}")
-        backbone_flow_state_dict = torch.load(f"{args.path_to_load_backbone}/generative_model.npy")
-
-        # Load the flow state dict ONLY Into the backbone for the model, in particular into model.dynamics.k
-        model.dynamics.k.load_state_dict(backbone_flow_state_dict)
-
-
-    if args.resume is not None:
-        #flow_state_dict = torch.load(join('outputs', args.resume, 'flow.npy'))  # for vdm
-        flow_state_dict = torch.load(join(args.resume, 'generative_model.npy'))  # for vdm
-
-        if not args.use_separate_optimisers:
-            optim_state_dict = torch.load(join(args.resume, 'optim.npy'))
-            model.load_state_dict(flow_state_dict)
-            optim.load_state_dict(optim_state_dict)
-        else:
-            optim_K_state_dict = torch.load(join(args.resume, 'optim_K.npy'))
-            optim_gamma_state_dict = torch.load(join(args.resume, 'optim_gamma.npy'))
-            model.load_state_dict(flow_state_dict)
-            optim_K.load_state_dict(optim_K_state_dict)
-            optim_gamma.load_state_dict(optim_gamma_state_dict)
-
-
-        if args.scheduler is not None and not args.use_separate_optimisers:
-            scheduler_state_dict = torch.load(join(args.resume, 'scheduler.npy'))
-            scheduler.load_state_dict(scheduler_state_dict)
-
-    # Initialize dataparallel if enabled and possible.
-    if args.dp and torch.cuda.device_count() > 1:
-        print(f'Training using {torch.cuda.device_count()} GPUs')
-        model_dp = torch.nn.DataParallel(model.cpu())
-        model_dp = model_dp.cuda()
-    else:
-        model_dp = model
-
-
-    # Create EMA either for both models or separate for gamma and K
-    if args.ema_decay > 0 or args.use_separate_ema:
-        model_ema = copy.deepcopy(model)
-        ema = flow_utils.EMA(beta=args.ema_decay, use_separate_emas=args.use_separate_ema, k_beta=args.ema_decay_K, gamma_beta=args.ema_decay_gamma)
-
-        # Load the EMA backbone model
-        if args.path_to_load_backbone != "":
-            if args.type_backbone_to_load == "EMA":
-                print(f"Loading the EMA backbone model from {args.path_to_load_backbone}")
-                backbone_flow_state_dict = torch.load(f"{args.path_to_load_backbone}/generative_model_ema.npy")
-                model_ema.dynamics.k.load_state_dict(backbone_flow_state_dict)
-
-        # NOTE: LEO
-        if args.resume is not None:
-            ema_state_dict = torch.load(join(args.resume, 'generative_model_ema.npy'))   # CHANGE
-            model_ema.load_state_dict(ema_state_dict)
-
-        if args.dp and torch.cuda.device_count() > 1:
-            model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
-        else:
-            model_ema_dp = model_ema
-
-    else:
-        ema = None
-        model_ema = model
-        model_ema_dp = model_dp  # how is this used?                
-
-
-    best_nll_val = 1e8
-    best_nll_test = 1e8
-    best_mol_stable = 0
-
-    for epoch in range(args.start_epoch, args.n_epochs):
-        wandb.log({"Epoch": epoch}, commit=True)
-        print(f"--- Epoch {epoch} ---")
-
-        start_epoch = time.time()
-        train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
-                    model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
-                    nodes_dist=nodes_dist, dataset_info=dataset_info,
-                    gradnorm_queue=gradnorm_queue, optim=optim, optim_gamma=optim_gamma, optim_K=optim_K,
-                    scheduler=scheduler, prop_dist=prop_dist)
-        print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
-
-        if epoch % args.test_epochs == 0 or epoch == args.n_epochs - 1 or epoch == args.start_epoch:
-            if isinstance(model, en_diffusion.EnVariationalDiffusion):
-                if args.com_free:
-                    wandb.log(model.log_info(), commit=True)  # should be constant for l2
-            if not args.break_train_epoch:  # for debug
-                # Samples n_stability_samples points and compute atm_stable, mol_stable, validity, uniqueness and novelty
-                validity_dict = analyze_and_save(args=args, epoch=epoch, model_sample=model_ema, nodes_dist=nodes_dist,
-                                 dataset_info=dataset_info, device=device,
-                                 prop_dist=prop_dist, n_samples=args.n_stability_samples)
-                mol_stable = validity_dict["mol_stable"]
-            
-            # Compute average nll over the val/test set
-            nll_val, model_metric_val, backbone_metric_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model_ema_dp,
-                           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
-                           property_norms=property_norms)
-            nll_test, model_metric_test, backbone_metric_test = test(args=args, loader=dataloaders['test'], epoch=epoch, eval_model=model_ema_dp,
-                            partition='Test', device=device, dtype=dtype,
-                            nodes_dist=nodes_dist, property_norms=property_norms)
-
-            # Save best model
-            if nll_val < best_nll_val: 
-                best_nll_val = nll_val
-                best_nll_test = nll_test
-                if args.save_model:
-                    args.current_epoch = epoch + 1
-
-                    # Save optimisers
-                    if not args.use_separate_optimisers:
-                        utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
-                    else:
-                        utils.save_model(optim_K, 'outputs/%s/optim_K.npy' % args.exp_name)
-                        utils.save_model(optim_gamma, 'outputs/%s/optim_gamma.npy' % args.exp_name)
-
-                    utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
-                    if scheduler is not None:
-                        utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
-
-                    # Check if we are doing separate EMA or not
-                    if args.ema_decay > 0 or args.use_separate_ema:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)                       
-
-                    # Save args
-                    with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
-                        pickle.dump(args, f)
-
-            # Save best model based on mol_stable
-            if mol_stable > best_mol_stable:
-                if args.save_model:
-                    # Check for optimiser
-                    if not args.use_separate_optimisers:
-                        utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
-                    else:
-                        utils.save_model(optim_K, 'outputs/%s/optim_K_ms.npy' % args.exp_name)
-                        utils.save_model(optim_gamma, 'outputs/%s/optim_gamma_ms.npy' % args.exp_name)                                                                                
-                    utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
-
-                    # Check for scheduler
-                    if scheduler is not None:
-                        utils.save_model(scheduler, 'outputs/%s/scheduler_ms.npy' % args.exp_name)
-
-                    if args.ema_decay > 0 or args.use_separate_ema:
-                        utils.save_model(model_ema, 'outputs/%s/generative_model_ema_ms.npy' % args.exp_name)
-
-                    with open('outputs/%s/args_ms.pickle' % args.exp_name, 'wb') as f:
-                        pickle.dump(args, f)
-
-            print('Val loss: %.4f \t Test loss:  %.4f' % (nll_val, nll_test))
-            print('Best val loss: %.4f \t Best test loss:  %.4f' % (best_nll_val, best_nll_test))
-            wandb.log({"Val loss ": nll_val}, commit=True)
-            wandb.log({"Test loss ": nll_test}, commit=True)
-            wandb.log({"Best cross-validated test loss ": best_nll_test}, commit=True)
-
-            if args.use_equivariance_metric:
-                wandb.log({"Val model equivariance metric ": model_metric_val}, commit=True)
-                wandb.log({"Val backbone equivariance metric ": backbone_metric_val}, commit=True)
-                wandb.log({"Test model equivariance metric ": model_metric_test}, commit=True)
-                wandb.log({"Test backbone equivariance metric ": backbone_metric_test}, commit=True)            
-
-
-if __name__ == "__main__":
-    main()
+############################################################################################################
