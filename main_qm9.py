@@ -354,6 +354,7 @@ if args.resume is not None:
     normalization_factor = args.normalization_factor
     aggregation_method = args.aggregation_method
     mlp_type = args.mlp_type  # LEO
+    n_epochs = args.n_epochs
 
     with open(join(args.resume, 'args.pickle'), 'rb') as f:
         args = pickle.load(f)
@@ -364,6 +365,7 @@ if args.resume is not None:
     args.exp_name = exp_name  # new exp_name
     args.start_epoch = start_epoch
     args.wandb_usr = wandb_usr
+    args.n_epochs = n_epochs
 
     # Careful with this -->
     if not hasattr(args, 'normalization_factor'):
