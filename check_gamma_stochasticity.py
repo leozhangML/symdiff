@@ -425,3 +425,23 @@ ema_state_dict = torch.load(args.model_loc.replace("generative_model.npy", "gene
 model_ema.load_state_dict(ema_state_dict)
 
 ############################################################################################################
+# GET STOCHAISTY OF GAMMA
+############################################################################################################
+
+# To get stochasticity of gamma:
+
+1. Create a tensor of size (gamma_samples_stochasticity, 1, 3 + d) where for the third dimension
+   we have the vector 1, 0, 0 for the first 3 elements of the 3rd dimension, and the rest of the elements are 0s
+
+2. Create a node mask of size (gamma_samples_stochasticity, 1, 1) where all elements are 1s
+
+3. Pass this tensor through the _forward model of our DDG model, where for the DDG model we have an argument to output just the gammas
+    a. This outputs a tensor of size (gamma_samples_stochasticity, 3, 3) which is the gamma tensor
+
+4. Subset the outputted tensor to get a tensor of shape (gamma_samples_stochasticity, 3, 1)
+
+5. Save this as a numpy array called "stochastic_gamma_samples" in the experiment name folder
+
+
+# NOTE: Instead of creating our samples like that, get a molecule from the dataloader and replicate it
+# gamma_samples_stochasticity times and pass it through the model to get the gammas

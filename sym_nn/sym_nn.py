@@ -2180,7 +2180,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         gamma = qr(
             self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
             )[0]
-        gamma = torch.bmm(gamma, g.transpose(2, 1))
+        gamma = torch.bmm(gamma, g.transpose(2, 1)) #  TODO CHANGE THIS TO OUTPUT THUS
 
         gamma_inv_x = torch.bmm(x, gamma.clone())
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
