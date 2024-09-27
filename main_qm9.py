@@ -503,11 +503,12 @@ def main():
             model_ema_dp = torch.nn.DataParallel(model_ema)  # used just for test
         else:
             model_ema_dp = model_ema
-        
+
     else:
         ema = None
         model_ema = model
         model_ema_dp = model_dp  # how is this used?                
+
 
     best_nll_val = 1e8
     best_nll_test = 1e8

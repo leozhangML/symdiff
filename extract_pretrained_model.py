@@ -379,6 +379,7 @@ else:
 
 args.context_node_nf = context_node_nf
 
+
 # Create the model (DiT Gaussian Dynamics)
 model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
 if prop_dist is not None:  # when conditioning
@@ -389,8 +390,28 @@ model = model.to(device)
 flow_state_dict = torch.load(args.model_loc)
 model.load_state_dict(flow_state_dict)
 
-
 # Save the model in model (i.e. model.model) in save_loc_folder as generative_model.pt
 save_loc = join(args.save_loc_folder, "generative_model.npy")
 utils.save_model(model.dynamics.model, save_loc)
 print(f"Model saved at {save_loc}")
+
+
+############################################################################################################
+
+# Get the EMA model and save it
+
+# Create the model (DiT Gaussian Dynamics) again
+model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
+if prop_dist is not None:  # when conditioning
+    prop_dist.set_normalizer(property_norms)
+model = model.to(device)
+
+# Load the full model from model_loc - replace generative_model.npy with  generative_model_ema
+ema_state_dict = torch.load(args.model_loc.replace("generative_model.npy", "generative_model_ema.npy"))
+model.load_state_dict(ema_state_dict)
+
+# Save the model in model (i.e. model.model) in save_loc_folder as generative_model_ema.pt
+save_loc = join(args.save_loc_folder, "generative_model_ema.npy")
+utils.save_model(model.dynamics.model, save_loc)
+print(f"EMA model saved at {save_loc}")
+

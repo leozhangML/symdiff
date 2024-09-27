@@ -1,135 +1,87 @@
-best_optimisation_ddg_lr_1e_4_5m_seed_0
-Overview: val nll -195.51619980373812 test nll -196.79106252056386 {'mol_stable': 0.0053, 'atm_stable': 0.8408623371051643}
-Validity over 10000 molecules: 96.25%
-Uniqueness over 9625 valid molecules: 99.97%
-{'mol_stable': 0.0053, 'atm_stable': 0.8408623371051643}
-Validity 0.9625, Uniqueness: 0.9997, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -26.97
- Val NLL 	, iter: 50/2705, NLL: -76.40
+best_optimisation_dg_lr_1e_4_5m_aug_fix
+eval_log_seed_0
+Overview: val nll -191.1786500314674 test nll -190.34852740870664 {'mol_stable': 0.0031, 'atm_stable': 0.8397154328560521}
+Validity over 10000 molecules: 94.05%
+Uniqueness over 9405 valid molecules: 100.00%
+{'mol_stable': 0.0031, 'atm_stable': 0.8397154328560521}
+Validity 0.9405, Uniqueness: 1.0000, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: 23.86
+ Val NLL 	, iter: 50/2705, NLL: -80.89
+----------------
+eval_log_seed_1
+Overview: val nll -192.05197205092318 test nll -191.31322715809083 {'mol_stable': 0.0042, 'atm_stable': 0.8404882271838227}
+Validity over 10000 molecules: 94.62%
+Uniqueness over 9462 valid molecules: 99.99%
+{'mol_stable': 0.0042, 'atm_stable': 0.8404882271838227}
+Validity 0.9462, Uniqueness: 0.9999, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: 2.28
+ Val NLL 	, iter: 50/2705, NLL: -87.58
+----------------
+eval_log_seed_2
+Overview: val nll -187.9347986907801 test nll -191.71413512496844 {'mol_stable': 0.004, 'atm_stable': 0.8383889482997466}
+Validity over 10000 molecules: 94.12%
+Uniqueness over 9412 valid molecules: 100.00%
+{'mol_stable': 0.004, 'atm_stable': 0.8383889482997466}
+Validity 0.9412, Uniqueness: 1.0000, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: -2.71
+ Val NLL 	, iter: 50/2705, NLL: -76.52
+----------------
+eval_log_aug_sampling_seed_0
+Overview: val nll -190.5644610291295 test nll -190.07469965793163 {'mol_stable': 0.0044, 'atm_stable': 0.8409988522638292}
+Validity over 10000 molecules: 94.63%
+Uniqueness over 9463 valid molecules: 100.00%
+{'mol_stable': 0.0044, 'atm_stable': 0.8409988522638292}
+Validity 0.9463, Uniqueness: 1.0000, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: -33.57
+ Val NLL 	, iter: 50/2705, NLL: -102.47
+----------------
+eval_log_aug_sampling_seed_1
+Overview: val nll -191.79133820351248 test nll -190.33713325417577 {'mol_stable': 0.0038, 'atm_stable': 0.840361426384813}
+Validity over 10000 molecules: 94.59%
+Uniqueness over 9459 valid molecules: 100.00%
+{'mol_stable': 0.0038, 'atm_stable': 0.840361426384813}
+Validity 0.9459, Uniqueness: 1.0000, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: -18.32
+ Val NLL 	, iter: 50/2705, NLL: -88.72
+----------------
+eval_log_aug_sampling_seed_2
+Overview: val nll -191.90035824577515 test nll -188.0284395964922 {'mol_stable': 0.0046, 'atm_stable': 0.840588066965448}
+Validity over 10000 molecules: 94.32%
+Uniqueness over 9432 valid molecules: 99.98%
+{'mol_stable': 0.0046, 'atm_stable': 0.840588066965448}
+Validity 0.9432, Uniqueness: 0.9998, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: -6.76
+ Val NLL 	, iter: 50/2705, NLL: -89.44
+----------------
 --------------------------------
-best_optimisation_ddg_lr_1e_4_5m_seed_1
-Overview: val nll -193.1831848494298 test nll -196.73985885710732 {'mol_stable': 0.0053, 'atm_stable': 0.8422052621094277}
-Validity over 10000 molecules: 95.97%
-Uniqueness over 9597 valid molecules: 99.98%
-{'mol_stable': 0.0053, 'atm_stable': 0.8422052621094277}
-Validity 0.9597, Uniqueness: 0.9998, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: 101.88
- Val NLL 	, iter: 50/2705, NLL: -94.87
 --------------------------------
-best_optimisation_ddg_lr_1e_4_5m_seed_2
-Overview: val nll -193.46452218199371 test nll -196.78179867215454 {'mol_stable': 0.0045, 'atm_stable': 0.8413260469525455}
-Validity over 10000 molecules: 95.76%
-Uniqueness over 9576 valid molecules: 99.99%
-{'mol_stable': 0.0045, 'atm_stable': 0.8413260469525455}
-Validity 0.9576, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -30.58
- Val NLL 	, iter: 50/2705, NLL: -88.54
+best_optimisation_dg_lr_1e_4_5m_fix
+eval_log_seed_0
+Overview: val nll -195.8413190573076 test nll -203.0598134743597 {'mol_stable': 0.003, 'atm_stable': 0.8327067267182494}
+Validity over 10000 molecules: 95.70%
+Uniqueness over 9570 valid molecules: 99.99%
+{'mol_stable': 0.003, 'atm_stable': 0.8327067267182494}
+Validity 0.9570, Uniqueness: 0.9999, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: 6.36
+ Val NLL 	, iter: 50/2705, NLL: -96.15
+----------------
+eval_log_seed_1
+Overview: val nll -199.48623528098489 test nll -200.05696368209445 {'mol_stable': 0.0033, 'atm_stable': 0.834209028790984}
+Validity over 10000 molecules: 95.68%
+Uniqueness over 9568 valid molecules: 99.99%
+{'mol_stable': 0.0033, 'atm_stable': 0.834209028790984}
+Validity 0.9568, Uniqueness: 0.9999, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: 75.57
+ Val NLL 	, iter: 50/2705, NLL: -88.40
+----------------
+eval_log_seed_2
+Overview: val nll -199.02670736456733 test nll -198.5927613837243 {'mol_stable': 0.0029, 'atm_stable': 0.8345608070496956}
+Validity over 10000 molecules: 95.60%
+Uniqueness over 9560 valid molecules: 100.00%
+{'mol_stable': 0.0029, 'atm_stable': 0.8345608070496956}
+Validity 0.9560, Uniqueness: 1.0000, Novelty: 0.0000
+ Val NLL 	, iter: 0/2705, NLL: -53.35
+ Val NLL 	, iter: 50/2705, NLL: -100.40
+----------------
 --------------------------------
-best_optimisation_dg_lr_1e_4_5m_aug_seed_0
-Overview: val nll -190.44185237415874 test nll -189.74272899016316 {'mol_stable': 0.0033, 'atm_stable': 0.8362616814422766}
-Validity over 10000 molecules: 95.40%
-Uniqueness over 9540 valid molecules: 100.00%
-{'mol_stable': 0.0033, 'atm_stable': 0.8362616814422766}
-Validity 0.9540, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: 178.72
- Val NLL 	, iter: 50/2705, NLL: -72.70
---------------------------------
-best_optimisation_dg_lr_1e_4_5m_aug_seed_1
-Overview: val nll -192.46531103637687 test nll -192.27425083713823 {'mol_stable': 0.0036, 'atm_stable': 0.8361417456275648}
-Validity over 10000 molecules: 95.10%
-Uniqueness over 9510 valid molecules: 99.99%
-{'mol_stable': 0.0036, 'atm_stable': 0.8361417456275648}
-Validity 0.9510, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -2.39
- Val NLL 	, iter: 50/2705, NLL: -87.67
---------------------------------
-best_optimisation_dg_lr_1e_4_5m_aug_seed_2
-Overview: val nll -190.54932397283505 test nll -187.80113607601268 {'mol_stable': 0.0045, 'atm_stable': 0.8359672123402546}
-Validity over 10000 molecules: 95.08%
-Uniqueness over 9508 valid molecules: 99.99%
-{'mol_stable': 0.0045, 'atm_stable': 0.8359672123402546}
-Validity 0.9508, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: 137.78
- Val NLL 	, iter: 50/2705, NLL: -84.99
---------------------------------
-best_optimisation_dg_lr_1e_4_5m_seed_0
-Overview: val nll -196.78666931167422 test nll -198.11648651632092 {'mol_stable': 0.0035, 'atm_stable': 0.8357370338129327}
-Validity over 10000 molecules: 95.61%
-Uniqueness over 9561 valid molecules: 99.99%
-{'mol_stable': 0.0035, 'atm_stable': 0.8357370338129327}
-Validity 0.9561, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -56.91
- Val NLL 	, iter: 50/2705, NLL: -101.16
---------------------------------
-best_optimisation_dg_lr_1e_4_5m_seed_1
-Overview: val nll -195.31808532481108 test nll -196.53812414399783 {'mol_stable': 0.0037, 'atm_stable': 0.8348676207782066}
-Validity over 10000 molecules: 95.07%
-Uniqueness over 9507 valid molecules: 99.99%
-{'mol_stable': 0.0037, 'atm_stable': 0.8348676207782066}
-Validity 0.9507, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: 22.09
- Val NLL 	, iter: 50/2705, NLL: -111.45
---------------------------------
-best_optimisation_dg_lr_1e_4_5m_seed_2
-Overview: val nll -194.358141946807 test nll -196.0534845308576 {'mol_stable': 0.004, 'atm_stable': 0.8346236042330041}
-Validity over 10000 molecules: 95.57%
-Uniqueness over 9557 valid molecules: 99.99%
-{'mol_stable': 0.004, 'atm_stable': 0.8346236042330041}
-Validity 0.9557, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: 47.07
- Val NLL 	, iter: 50/2705, NLL: -85.61
---------------------------------
-best_optimisation_ddg_lr_1e_4_10m_seed_0
-Overview: val nll -230.77751660250308 test nll -231.66476495206953 {'mol_stable': 0.0093, 'atm_stable': 0.8540390258971323}
-Validity over 10000 molecules: 96.81%
-Uniqueness over 9681 valid molecules: 100.00%
-{'mol_stable': 0.0093, 'atm_stable': 0.8540390258971323}
-Validity 0.9681, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -75.91
- Val NLL 	, iter: 50/2705, NLL: -98.70
---------------------------------
-best_optimisation_ddg_lr_1e_4_10m_seed_1
-Overview: val nll -227.07098345001714 test nll -228.78475336741258 {'mol_stable': 0.0082, 'atm_stable': 0.8524479597124027}
-Validity over 10000 molecules: 96.86%
-Uniqueness over 9686 valid molecules: 100.00%
-{'mol_stable': 0.0082, 'atm_stable': 0.8524479597124027}
-Validity 0.9686, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -33.82
- Val NLL 	, iter: 50/2705, NLL: -104.58
---------------------------------
-best_optimisation_ddg_lr_1e_4_10m_seed_2
-Overview: val nll -228.38295046191334 test nll -229.89814749503708 {'mol_stable': 0.0103, 'atm_stable': 0.8537412201527972}
-Validity over 10000 molecules: 96.68%
-Uniqueness over 9668 valid molecules: 100.00%
-{'mol_stable': 0.0103, 'atm_stable': 0.8537412201527972}
-Validity 0.9668, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -48.23
- Val NLL 	, iter: 50/2705, NLL: -125.33
---------------------------------
-best_ddg_geom_drugs_lr_2e_4_seed_0
-Overview: val nll -266.7272331523582 test nll -267.0553363179829 {'mol_stable': 0.0146, 'atm_stable': 0.8620496230846469}
-Validity over 10000 molecules: 98.11%
-Uniqueness over 9811 valid molecules: 99.99%
-{'mol_stable': 0.0146, 'atm_stable': 0.8620496230846469}
-Validity 0.9811, Uniqueness: 0.9999, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -34.78
- Val NLL 	, iter: 50/2705, NLL: -140.71
---------------------------------
-best_ddg_geom_drugs_lr_2e_4_seed_1
-Overview: val nll -267.3021575116094 test nll -266.3874553646249 {'mol_stable': 0.0142, 'atm_stable': 0.8615123760567678}
-Validity over 10000 molecules: 98.15%
-Uniqueness over 9815 valid molecules: 100.00%
-{'mol_stable': 0.0142, 'atm_stable': 0.8615123760567678}
-Validity 0.9815, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -61.54
- Val NLL 	, iter: 50/2705, NLL: -132.51
---------------------------------
-best_ddg_geom_drugs_lr_2e_4_seed_2
-Overview: val nll -268.76607403373947 test nll -267.1906364222909 {'mol_stable': 0.0122, 'atm_stable': 0.8612192069852949}
-Validity over 10000 molecules: 98.27%
-Uniqueness over 9827 valid molecules: 100.00%
-{'mol_stable': 0.0122, 'atm_stable': 0.8612192069852949}
-Validity 0.9827, Uniqueness: 1.0000, Novelty: 0.0000
- Val NLL 	, iter: 0/2705, NLL: -27.15
- Val NLL 	, iter: 50/2705, NLL: -126.73
 --------------------------------
