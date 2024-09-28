@@ -38,7 +38,7 @@ from train_test import train_epoch, test, analyze_and_save
 from configs.datasets_config import get_dataset_info
 
 
-print(f"os.getcwd(): {o.getcwd()}")
+print(f"os.getcwd(): {os.getcwd()}")
 
 ############################################################################################################
 # ARGUMENTS
