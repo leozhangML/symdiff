@@ -24,6 +24,8 @@ import os
 
 from tqdm import tqdm
 from os.path import join
+import numpy as np
+import random
 
 from qm9 import dataset
 from qm9.models import get_optim, get_scheduler, get_model
@@ -465,7 +467,7 @@ for i, data in tqdm(enumerate(test_loader)):
     x = remove_mean_with_mask(x, node_mask)
 
     # Get a single datapoint by sampling from 0 to batch size
-    idx = torch.randint(0, x.size(0), (1,)).item()
+    idx = random.randint(0, x.size(0)-1)
     x = x[idx, :, :]
     node_mask = node_mask[idx, :, :]
     edge_mask = edge_mask[idx, :, :]
@@ -478,7 +480,7 @@ for i, data in tqdm(enumerate(test_loader)):
     print(f"edge_mask.shape: {edge_mask.shape}")
     print(f"one_hot.shape: {one_hot.shape}")
     print(f"charges.shape: {charges.shape}")
-    
+
 
 
     break
