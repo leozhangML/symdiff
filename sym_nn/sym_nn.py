@@ -1978,6 +1978,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.args = args
         self.n_dims = n_dims
         self.use_separate_gauss_embs = use_separate_gauss_embs
+        self.return_gamma = args.return_gamma
+        self.return_noise = args.return_noise
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
@@ -2182,6 +2184,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
             )[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1)) #  TODO CHANGE THIS TO OUTPUT THUS
 
+
         gamma_inv_x = torch.bmm(x, gamma.clone())
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
 
@@ -2198,9 +2201,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         x = torch.bmm(x, gamma.transpose(2, 1))
-        xh = torch.cat([x, h], dim=-1)
+        xh = torch.cat([x, h], dim=-1)        
 
         assert_correctly_masked(xh, node_mask)
+
+        # Output
+        if self.return_gamma:
+            return xh, gamma
 
         return xh
 

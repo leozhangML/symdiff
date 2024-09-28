@@ -359,6 +359,8 @@ parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian D
 
 # Arguments for stochasticiy
 parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
+parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+
 
 ############################################################################################################
 
@@ -432,15 +434,15 @@ model_ema.load_state_dict(ema_state_dict)
 
 # To get stochasticity of gamma:
 
-# 1. Load the dataloader of our QM9 dataset.
+# 1. Load the dataloader of our QM9 dataset.  X
 
-# 2. Get one datapoint from the QM9 dataset.
+# 2. Get one datapoint from the QM9 dataset.  X
 
-# 3. Put this datapoint into the tensor format that our model expect.
+# 3. Put this datapoint into the tensor format that our model expect.  X
 
-# 4. Create gamma_samples_stochasticity number of samples of the same molecule
+# 4. Create gamma_samples_stochasticity number of samples of the same molecule  X
 
-# 5. Create a node mask of size (gamma_samples_stochasticity, 1, 1) where all elements are 1s
+# 5. Create a node mask of size (gamma_samples_stochasticity, 1, 1) where all elements are 1s  X
 
 # 6. Pass this tensor through the _forward model of our DDG model, where for the DDG model we have an argument to output just the gammas
 #     a. This outputs a tensor of size (gamma_samples_stochasticity, 3, 3) which is the gamma tensor
@@ -479,9 +481,22 @@ for i, data in tqdm(enumerate(test_loader)):
     node_mask = node_mask.repeat(gamma_samples_stochasticity, 1, 1)
     one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
     charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
-    
+    h = {'categorical': one_hot, 'integer': charges}
+
+    # Pass through the model's _forward argument which takes in t, xh, node_mask, edge_mask, context, gamma=None
+    xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
+    xh, gamma = model_ema.dynamics._forward(1, xh, node_mask, edge_mask, context=None)
+
+    # Print shapes of xh and gamma
+    print(f"xh.shape: {xh.shape}, gamma.shape: {gamma.shape}")
+
+    # Print types of xh and gamma
+    print(f"xh.dtype: {xh.dtype}, gamma.dtype: {gamma.dtype}")
+    print(f"type(xh): {type(xh)}, type(gamma): {type(gamma)}")
+
 
     # Print the shapes and types
+    print(f"xh.shape: {xh.shape}, xh.dtype: {xh.dtype}, {type(xh)}")
     print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, {type(x)}")
     print(f"node_mask.shape: {node_mask.shape}, node_mask.dtype: {node_mask.dtype}, {type(node_mask)}")
     print(f"edge_mask.shape: {edge_mask.shape}, edge_mask.dtype: {edge_mask.dtype}, {type(edge_mask)}")
