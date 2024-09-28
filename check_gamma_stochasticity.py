@@ -482,10 +482,12 @@ for i, data in tqdm(enumerate(test_loader)):
     one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
     charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
     h = {'categorical': one_hot, 'integer': charges}
+    t = torch.randint(1, 2, size=(gamma_samples_stochasticity, 1), device=x.device).float()
+
 
     # Pass through the model's _forward argument which takes in t, xh, node_mask, edge_mask, context, gamma=None
     xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
-    xh, gamma = model_ema.dynamics._forward(1, xh, node_mask, edge_mask, context=None)
+    xh, gamma = model_ema.dynamics._forward(t, xh, node_mask, edge_mask, context=None)
 
     # Print shapes of xh and gamma
     print(f"xh.shape: {xh.shape}, gamma.shape: {gamma.shape}")
