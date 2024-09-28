@@ -457,6 +457,7 @@ model_ema.eval()
 test_loader = dataloaders['test']
 n_iterations = len(test_loader)
 dtype = torch.float32
+gamma_samples_stochasticity = args.gamma_samples_stochasticity
 for i, data in tqdm(enumerate(test_loader)):
     x = data["positions"].to(device, dtype) 
     node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
@@ -472,6 +473,13 @@ for i, data in tqdm(enumerate(test_loader)):
     node_mask = node_mask[idx, :, :]
     one_hot = one_hot[idx, :, :]
     charges = charges[idx, :, :]
+
+    # Repeat, x, node_mask, one_hot and charges gamma_samples_stochasticity times
+    x = x.repeat(gamma_samples_stochasticity, 1, 1)
+    node_mask = node_mask.repeat(gamma_samples_stochasticity, 1, 1)
+    one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
+    charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
+    
 
     # Print the shapes and types
     print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, {type(x)}")
