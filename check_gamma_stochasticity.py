@@ -354,7 +354,6 @@ parser.add_argument('--n_dims', type=int, default=3)
 ############################################################################################################
 
 parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian Dynamics model")
-parser.add_argument('--save_loc_folder', type=str, default="The folder to save the extracted models")
 
 # Arguments for stochasticiy
 parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
