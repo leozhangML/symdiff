@@ -467,19 +467,20 @@ for i, data in tqdm(enumerate(test_loader)):
     x = remove_mean_with_mask(x, node_mask)
 
     # Get a single datapoint by sampling from 0 to batch size
-    idx = random.randint(0, x.size(0)-1)
-    x = x[idx, :, :]
-    node_mask = node_mask[idx, :, :]
-    edge_mask = edge_mask[idx, :, :]
-    one_hot = one_hot[idx, :, :]
-    charges = charges[idx, :, :]
+    # idx = random.randint(0, x.size(0)-1)
+    # print(idx, type(idx))
+    # x = x[idx, :, :]
+    # node_mask = node_mask[idx, :, :]
+    # edge_mask = edge_mask[idx, :, :]
+    # one_hot = one_hot[idx, :, :]
+    # charges = charges[idx, :, :]
 
-    # Print the shapes
-    print(f"x.shape: {x.shape}")
-    print(f"node_mask.shape: {node_mask.shape}")
-    print(f"edge_mask.shape: {edge_mask.shape}")
-    print(f"one_hot.shape: {one_hot.shape}")
-    print(f"charges.shape: {charges.shape}")
+    # Print the shapes and types
+    print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, {type(x)}")
+    print(f"node_mask.shape: {node_mask.shape}, node_mask.dtype: {node_mask.dtype}, {type(node_mask)}")
+    print(f"edge_mask.shape: {edge_mask.shape}, edge_mask.dtype: {edge_mask.dtype}, {type(edge_mask)}")
+    print(f"one_hot.shape: {one_hot.shape}, one_hot.dtype: {one_hot.dtype}, {type(one_hot)}")
+    print(f"charges.shape: {charges.shape}, charges.dtype: {charges.dtype}, {type(charges)}")
 
 
 
