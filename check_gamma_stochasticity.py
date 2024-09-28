@@ -467,13 +467,11 @@ for i, data in tqdm(enumerate(test_loader)):
     x = remove_mean_with_mask(x, node_mask)
 
     # Get a single datapoint by sampling from 0 to batch size
-    # idx = random.randint(0, x.size(0)-1)
-    # print(idx, type(idx))
-    # x = x[idx, :, :]
-    # node_mask = node_mask[idx, :, :]
-    # edge_mask = edge_mask[idx, :, :]
-    # one_hot = one_hot[idx, :, :]
-    # charges = charges[idx, :, :]
+    idx = random.randint(0, x.size(0)-1)
+    x = x[idx, :, :]
+    node_mask = node_mask[idx, :, :]
+    one_hot = one_hot[idx, :, :]
+    charges = charges[idx, :, :]
 
     # Print the shapes and types
     print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, {type(x)}")
