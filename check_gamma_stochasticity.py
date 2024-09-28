@@ -464,14 +464,22 @@ for i, data in tqdm(enumerate(test_loader)):
 
     x = remove_mean_with_mask(x, node_mask)
 
-    # Print the shape of all of the above objecvts in this for loop
-    print(f"x: {x.shape}")
-    print(f"node_mask: {node_mask.shape}")
-    print(f"edge_mask: {edge_mask.shape}")
-    print(f"one_hot: {one_hot.shape}")
-    print(f"charges: {charges.shape}")
+    # Get a single datapoint by sampling from 0 to batch size
+    idx = torch.randint(0, x.size(0), (1,)).item()
+    x = x[idx, :, :]
+    node_mask = node_mask[idx, :, :]
+    edge_mask = edge_mask[idx, :, :]
+    one_hot = one_hot[idx, :, :]
+    charges = charges[idx, :, :]
+
+    # Print the shapes
+    print(f"x.shape: {x.shape}")
+    print(f"node_mask.shape: {node_mask.shape}")
+    print(f"edge_mask.shape: {edge_mask.shape}")
+    print(f"one_hot.shape: {one_hot.shape}")
+    print(f"charges.shape: {charges.shape}")
+    
 
 
-    # Print batch size
-    bs = x.size(0)
+    break
 
