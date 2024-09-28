@@ -12,27 +12,37 @@ try:
     print("RDKit found and imported")
 except ModuleNotFoundError:
     print("RDKit not found, please install it")
+
 import copy
 import utils
 import argparse
 import wandb
-from configs.datasets_config import get_dataset_info
-from os.path import join
-from qm9 import dataset
-from qm9.models import get_optim, get_scheduler, get_model
-from equivariant_diffusion import en_diffusion
-from equivariant_diffusion.utils import assert_correctly_masked
-from equivariant_diffusion import utils as flow_utils
 import torch
 import time
 import pickle
-from qm9.utils import prepare_context, compute_mean_mad
-from train_test import train_epoch, test, analyze_and_save
-
 import os
-print(f"os.getcwd(): {os.getcwd()}")
 
-#wandb.login(key="78d61cd721affd9ffa2f5e217ed6f49de71eb842")
+from tqdm import tqdm
+from os.path import join
+
+from qm9 import dataset
+from qm9.models import get_optim, get_scheduler, get_model
+from qm9.utils import prepare_context, compute_mean_mad
+from equivariant_diffusion import en_diffusion
+from equivariant_diffusion.utils import assert_correctly_masked
+from equivariant_diffusion import utils as flow_utils
+from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask,\
+    assert_correctly_masked, sample_center_gravity_zero_gaussian_with_mask
+
+from train_test import train_epoch, test, analyze_and_save
+from configs.datasets_config import get_dataset_info
+
+
+print(f"os.getcwd(): {o.getcwd()}")
+
+############################################################################################################
+# ARGUMENTS
+############################################################################################################
 
 parser = argparse.ArgumentParser(description='E3Diffusion')
 parser.add_argument('--exp_name', type=str, default='debug_10')
@@ -342,15 +352,15 @@ parser.add_argument('--n_dims', type=int, default=3)
 ############################################################################################################
 # NEW ARGS
 ############################################################################################################
+
 parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian Dynamics model")
 parser.add_argument('--save_loc_folder', type=str, default="The folder to save the extracted models")
 
-
 # Arguments for stochasticiy
-parser.add_argument('--check_gamma_stochasticity', action='store_true', help='Check the stochasticity of gamma')
 parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
 
 ############################################################################################################
+
 
 
 ############################################################################################################
@@ -363,10 +373,6 @@ print(args)
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
-
-# If save_loc_folder does not exist, create it with the necessary subfolders
-if not os.path.exists(args.save_loc_folder):
-    os.makedirs(args.save_loc_folder, exist_ok=True)
 
 
 # Getting args
@@ -401,11 +407,6 @@ model = model.to(device)
 flow_state_dict = torch.load(args.model_loc)
 model.load_state_dict(flow_state_dict)
 
-# Save the model in model (i.e. model.model) in save_loc_folder as generative_model.pt
-save_loc = join(args.save_loc_folder, "generative_model.npy")
-utils.save_model(model.dynamics.model, save_loc)
-print(f"Model saved at {save_loc}")
-
 
 ############################################################################################################
 # GET EMA MODEL
@@ -430,18 +431,49 @@ model_ema.load_state_dict(ema_state_dict)
 
 # To get stochasticity of gamma:
 
-1. Create a tensor of size (gamma_samples_stochasticity, 1, 3 + d) where for the third dimension
-   we have the vector 1, 0, 0 for the first 3 elements of the 3rd dimension, and the rest of the elements are 0s
+# 1. Load the dataloader of our QM9 dataset.
 
-2. Create a node mask of size (gamma_samples_stochasticity, 1, 1) where all elements are 1s
+# 2. Get one datapoint from the QM9 dataset.
 
-3. Pass this tensor through the _forward model of our DDG model, where for the DDG model we have an argument to output just the gammas
-    a. This outputs a tensor of size (gamma_samples_stochasticity, 3, 3) which is the gamma tensor
+# 3. Put this datapoint into the tensor format that our model expect.
 
-4. Subset the outputted tensor to get a tensor of shape (gamma_samples_stochasticity, 3, 1)
+# 4. Create gamma_samples_stochasticity number of samples of the same molecule
 
-5. Save this as a numpy array called "stochastic_gamma_samples" in the experiment name folder
+# 5. Create a node mask of size (gamma_samples_stochasticity, 1, 1) where all elements are 1s
+
+# 6. Pass this tensor through the _forward model of our DDG model, where for the DDG model we have an argument to output just the gammas
+#     a. This outputs a tensor of size (gamma_samples_stochasticity, 3, 3) which is the gamma tensor
+
+# 7. Subset the outputted tensor to get a tensor of shape (gamma_samples_stochasticity, 3, 1)
+
+# 8. Save this as a numpy array called "stochastic_gamma_samples" in the experiment name folder
 
 
-# NOTE: Instead of creating our samples like that, get a molecule from the dataloader and replicate it
-# gamma_samples_stochasticity times and pass it through the model to get the gammas
+# Getting one datapoint from the QM9 test dataloader
+
+model.eval()
+model_ema.eval()
+test_loader = dataloaders['test']
+n_iterations = len(test_loader)
+dtype = torch.float32
+for i, data in tqdm(test_loader):
+    x = data["position"].to(device, dtype) 
+
+    node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
+    edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
+    one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
+    charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
+
+    x = remove_mean_with_mask(x, node_mask)
+
+    # Print the shape of all of the above objecvts in this for loop
+    print(f"x: {x.shape}")
+    print(f"node_mask: {node_mask.shape}")
+    print(f"edge_mask: {edge_mask.shape}")
+    print(f"one_hot: {one_hot.shape}")
+    print(f"charges: {charges.shape}")
+
+
+    # Print batch size
+    bs = x.size(0)
+
