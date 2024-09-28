@@ -489,6 +489,14 @@ for i, data in tqdm(enumerate(test_loader)):
     xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
     xh, gamma = model_ema.dynamics._forward(t, xh, node_mask, edge_mask, context=None)
 
+    # Convert xh and gamma to numpy arrays
+    xh = xh.detach().cpu().numpy()
+    gamma = gamma.detach().cpu().numpy()
+
+    # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
+    np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_gamma_samples.npy", gamma)
+    np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_xh_samples.npy", xh)
+
     # Print shapes of xh and gamma
     print(f"xh.shape: {xh.shape}, gamma.shape: {gamma.shape}")
 
