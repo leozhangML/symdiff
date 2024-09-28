@@ -456,8 +456,7 @@ test_loader = dataloaders['test']
 n_iterations = len(test_loader)
 dtype = torch.float32
 for i, data in tqdm(enumerate(test_loader)):
-    x = data["position"].to(device, dtype) 
-
+    x = data["positions"].to(device, dtype) 
     node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
     edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
     one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
