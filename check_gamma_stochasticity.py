@@ -370,12 +370,14 @@ parser.add_argument('--return_gamma', action="store_true")  # default from EDM
 # GET NORMAL MODEL AND DATASET
 ############################################################################################################
 
+
 # Getting the dataset
 args = parser.parse_args()
 print(args)
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 atom_encoder = dataset_info['atom_encoder']
 atom_decoder = dataset_info['atom_decoder']
+os.makedirs(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}", exist_ok=True)
 
 
 # Getting args
