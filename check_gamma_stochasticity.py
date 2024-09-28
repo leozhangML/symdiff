@@ -455,7 +455,7 @@ model_ema.eval()
 test_loader = dataloaders['test']
 n_iterations = len(test_loader)
 dtype = torch.float32
-for i, data in tqdm(test_loader):
+for i, data in tqdm(enumerate(test_loader)):
     x = data["position"].to(device, dtype) 
 
     node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
