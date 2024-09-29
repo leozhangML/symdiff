@@ -331,6 +331,9 @@ parser.add_argument("--use_equivariance_metric", action="store_true", help="whet
 parser.add_argument("--n_importance_samples", type=int, default=32, help="whether to log the equivariance metrics")
 parser.add_argument('--n_dims', type=int, default=3)
 
+parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+
+
 
 # Getting the dataset
 args = parser.parse_args()
