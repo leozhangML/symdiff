@@ -857,7 +857,7 @@ class EnVariationalDiffusion(torch.nn.Module):
         return neg_log_pxh
 
 
-    def forward_for_checking_gamma_stoch(self, x, h, node_mask=None, edge_mask=None, context=None, t):
+    def forward_for_checking_gamma_stoch(self, x, h, node_mask=None, edge_mask=None, context=None, t=0):
         # Normalize data 
         x, h, delta_log_px = self.normalize(x, h, node_mask)
         out = self.compute_loss_checking_gamma_stoch(x, h, node_mask, edge_mask, context, t)
