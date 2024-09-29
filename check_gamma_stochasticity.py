@@ -468,8 +468,16 @@ n_iterations = len(test_loader)
 dtype = torch.float32
 gamma_samples_stochasticity = args.gamma_samples_stochasticity
 k_mols = args.num_mols
+times = args.list_of_times
+
+assert isinstance(times, list), "times should be a list of integers"
+
+for t in times:
+    # Create a directory to save the gamma samples for this t
+    os.makedirs(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/t_{t}", exist_ok=True)
+
 for j in range(k_mols):
-    for i, data in tqdm(enumerate(test_loader)):
+    for i, data in tqdm(enumerate(test_loader)):        
         x = data["positions"].to(device, dtype) 
         node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
         edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
@@ -491,20 +499,25 @@ for j in range(k_mols):
         one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
         charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
         h = {'categorical': one_hot, 'integer': charges}
-        t = torch.randint(1, 2, size=(gamma_samples_stochasticity, 1), device=x.device).float()
 
+        for t in times:
+            # Pass through EVD object with forwar_for_checking_gamma_stoch
+            out = model_ema.forward_for_checking_gamma_stoch(x, h, node_mask, edge_mask, None, t)
 
-        # Pass through the model's _forward argument which takes in t, xh, node_mask, edge_mask, context, gamma=None
-        xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
-        xh, gamma = model_ema.dynamics._forward(t, xh, node_mask, edge_mask, context=None)
+            # Save out
+            if args.return_gamma:
+                xh, gamma = out
+                gamma = gamma.detach().cpu().numpy()
+                xh = xh.detach().cpu().numpy()
 
-        # Convert xh and gamma to numpy arrays
-        xh = xh.detach().cpu().numpy()
-        gamma = gamma.detach().cpu().numpy()
+                # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
+                np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/t_{t}/stochastic_gamma_samples_{j}.npy", gamma)
+                np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/t_{t}/stochastic_xh_samples_{j}.npy", xh)
 
-        # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
-        np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_gamma_samples_{j}.npy", gamma)
-        np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_xh_samples_{j}.npy", xh)
+            if args.return_gamma_backbone:
+                gamma = out.detach().cpu().numpy()
 
-        break
+                # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
+                np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/t_{t}/stochastic_gamma_back_samples_{j}.npy", gamma)
 
+        break            
