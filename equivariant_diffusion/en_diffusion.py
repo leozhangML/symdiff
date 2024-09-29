@@ -301,7 +301,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             com_free=True, rho=None, sigma_min=None, sigma_max=None, data_aug_at_sampling=False):
         super().__init__()  
         self.data_aug_at_sampling = data_aug_at_sampling
-        self.use_noised_x = dynamics.use_noised_x
+        self.use_noise_x = dynamics.use_noise_x
 
 
         # norm_values=normalize_factors [1, 4, 1], norm_biases is default - how to scale xh, vlb is default
@@ -892,7 +892,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Sample noisy observation z_t given x, h for timestep t, from q(z_t | x, h)
         # Appy the COMfree trick
-        if self.use_noised_x:
+        if self.use_noise_x:
             z_t = alpha_t * xh + sigma_t * eps
         else:
             z_t = xh

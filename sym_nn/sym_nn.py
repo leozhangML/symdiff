@@ -1980,7 +1980,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.use_separate_gauss_embs = use_separate_gauss_embs
         self.return_gamma = args.return_gamma
         self.return_gamma_backbone = args.return_gamma_backbone
-        self.use_noised_x = args.use_noised_x
+        self.use_noise_x = args.use_noise_x
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
