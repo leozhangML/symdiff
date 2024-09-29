@@ -703,7 +703,7 @@ class EnVariationalDiffusion(torch.nn.Module):
     def compute_loss(self, x, h, node_mask, edge_mask, context, t0_always):
         """Computes an estimator for the variational lower bound, or the simple loss (MSE)."""
 
-        # This part is about whether to include loss term 0 always.
+        # This part is about whether to include loss term 0 always 0 whether evaluating or not
         if t0_always:
             # loss_term_0 will be computed separately.
             # estimator = loss_0 + loss_t,  where t ~ U({1, ..., T})
@@ -712,38 +712,40 @@ class EnVariationalDiffusion(torch.nn.Module):
             # estimator = loss_t,           where t ~ U({0, ..., T})  - False for training
             lowest_t = 0
 
-        # Sample a timestep t.
+        # Sample a timestep t - either from 0 to T, or from 1 to T
         t_int = torch.randint(
             lowest_t, self.T + 1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
         s_int = t_int - 1
         t_is_zero = (t_int == 0).float()  # Important to compute log p(x | z0)  [bs, 1] of 0, 1
 
-        # Normalize t to [0, 1]. Note that the negative
-        # step of s will never be used, since then p(x | z0) is computed.
+        # Normalize the times steps
+        # Step of s will never be used, since then p(x | z0) is computed.
         s = s_int / self.T
         t = t_int / self.T
 
-        # Compute gamma_s and gamma_t via the network.
+        # Compute gamma_s and gamma_t - these are for the noise schedule.
         gamma_s = self.inflate_batch_array(self.gamma(s), x)
         gamma_t = self.inflate_batch_array(self.gamma(t), x)
 
-        # Compute alpha_t and sigma_t from gamma.
+        # Compute alpha_t and sigma_t from gamma - these are the means and standard deviations of the normal distribution for the noise that
+        # will be added to the position and feature vectors
         alpha_t = self.alpha(gamma_t, x)  # [bs, 1, 1]
         sigma_t = self.sigma(gamma_t, x)
 
-        # Sample zt ~ Normal(alpha_t x, sigma_t)
+        # Sample noise from zt ~ Normal(alpha_t x, sigma_t)
         eps = self.sample_combined_position_feature_noise(
             n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=self.com_free)  # [bs, n_nodes, dims] - masks out non-atom indexes
 
         # Concatenate x, h[integer] and h[categorical].
         xh = torch.cat([x, h['categorical'], h['integer']], dim=2)  # [bs, n_nodes, dims]
-        # Sample z_t given x, h for timestep t, from q(z_t | x, h)
+        
+        # Sample noisy observation z_t given x, h for timestep t, from q(z_t | x, h)
+        # Appy the COMfree trick
         z_t = alpha_t * xh + sigma_t * eps
-
         if self.com_free:
             diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)
 
-        # Neural net prediction.
+        # Using our model to predict the denoised version of z_t  # TODO
         net_out = self.phi(z_t, t, node_mask, edge_mask, context)
 
         # Compute the error.
@@ -829,9 +831,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
     def forward(self, x, h, node_mask=None, edge_mask=None, context=None):
         """
-        Computes the loss (type l2 or NLL) if training. And if eval then always computes NLL.
-        """
-        # Normalize data, take into account volume change in x. - NOTE
+        Computes the loss (type l2 or NLL) if training. And if eval then always computes NLL."""
+        # Normalize data - take into account volume change in x
         x, h, delta_log_px = self.normalize(x, h, node_mask)
 
         # Reset delta_log_px if not vlb objective.

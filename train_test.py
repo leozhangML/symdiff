@@ -141,6 +141,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
         n_iterations = len(loader)
 
         for i, data in enumerate(loader):
+            # Get data
             x = data['positions'].to(device, dtype)
             batch_size = x.size(0)
             node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)
@@ -148,6 +149,7 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
             one_hot = data['one_hot'].to(device, dtype)
             charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)
 
+            # Whether to add noise around data points
             if args.augment_noise > 0:
                 # Add noise eps ~ N(0, augment_noise) around points.
                 eps = sample_center_gravity_zero_gaussian_with_mask(x.size(),
@@ -155,22 +157,24 @@ def test(args, loader, epoch, eval_model, device, dtype, property_norms, nodes_d
                                                                     node_mask)
                 x = x + eps * args.augment_noise
 
+            # Remove mean for COM
             x = remove_mean_with_mask(x, node_mask)
             check_mask_correct([x, one_hot, charges], node_mask)
             assert_mean_zero_with_mask(x, node_mask)
 
             h = {'categorical': one_hot, 'integer': charges}
 
+            # Conditioning - ignore
             if len(args.conditioning) > 0:
                 context = qm9utils.prepare_context(args.conditioning, data, property_norms).to(device, dtype)
                 assert_correctly_masked(context, node_mask)
             else:
                 context = None
 
-            # transform batch through flow
+            # Transform batch through flow and compute loss
             nll, _, _ = losses.compute_loss_and_nll(args, eval_model, nodes_dist, x, h,
                                                     node_mask, edge_mask, context)
-            # standard nll from forward KL
+            
 
             if args.use_equivariance_metric:
                 if args.model == "dit_dit_gaussian_dynamics":

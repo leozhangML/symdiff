@@ -2125,11 +2125,14 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         assert context is None
 
+        # Get shapes
         bs, n_nodes, _ = xh.shape
 
+        # Get x and h
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
 
+        # Apply COM free trick
         x = remove_mean_with_mask(x, node_mask)
         if not self.args.com_free:
             assert gamma is not None
@@ -2139,8 +2142,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 torch.exp(gamma[1]).unsqueeze(-1)
                 )
 
+        # Sample g from the haar - this is for our symmetrisation
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
+        
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
         if not self.use_separate_gauss_embs:
             pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
