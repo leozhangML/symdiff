@@ -361,7 +361,11 @@ parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian D
 parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
 parser.add_argument("--num_mols", type=int, default=10, help="Number of molecules to check the stochasticity of gamma")
 parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+parser.add_argument('--return_gamma_backbone', action="store_true")  # default from EDM
+parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
 
+# Add an arguments for a list of integers
+parser.add_argument('--list_of_times', nargs='+', type=int, help='List of times to check the stochasticity of gamma')
 
 ############################################################################################################
 

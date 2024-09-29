@@ -332,6 +332,9 @@ parser.add_argument("--n_importance_samples", type=int, default=32, help="whethe
 parser.add_argument('--n_dims', type=int, default=3)
 
 parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+parser.add_argument('--return_gamma_backbone', action="store_true")  # default from EDM
+parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
+
 
 
 

@@ -1979,6 +1979,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.n_dims = n_dims
         self.use_separate_gauss_embs = use_separate_gauss_embs
         self.return_gamma = args.return_gamma
+        self.return_gamma_backbone = args.return_gamma_backbone
+        self.use_noised_x = args.use_noised_x
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
@@ -2145,7 +2147,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # Sample g from the haar - this is for our symmetrisation
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
 
-        
+
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
         if not self.use_separate_gauss_embs:
             pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
@@ -2180,8 +2182,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
             use_final_layer=False
             )
 
+        # Return the output of just the backbone
+        if self.return_gamma_backbone:
+            return gamma
+
         # decoded summed representation into gamma - this is S_n-invariant
-        gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
+        gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size]
+
         # [bs, 3, 3]
         gamma = qr(
             self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)

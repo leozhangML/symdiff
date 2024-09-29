@@ -301,7 +301,9 @@ class EnVariationalDiffusion(torch.nn.Module):
             com_free=True, rho=None, sigma_min=None, sigma_max=None, data_aug_at_sampling=False):
         super().__init__()  
         self.data_aug_at_sampling = data_aug_at_sampling
- 
+        self.use_noised_x = dynamics.use_noised_x
+
+
         # norm_values=normalize_factors [1, 4, 1], norm_biases is default - how to scale xh, vlb is default
 
         assert loss_type in {'vlb', 'l2'}
@@ -853,6 +855,55 @@ class EnVariationalDiffusion(torch.nn.Module):
         neg_log_pxh = neg_log_pxh - delta_log_px  # add the (neg) log contribution of normalisation 
 
         return neg_log_pxh
+
+
+    def forward_for_checking_gamma_stoch(self, x, h, node_mask=None, edge_mask=None, context=None):
+        # Normalize data 
+        x, h, delta_log_px = self.normalize(x, h, node_mask)
+        pass
+
+
+    def compute_loss_checking_gamma_stoch(self, x, h, node_mask, edge_mask, context, t):
+        t_int = torch.randint(t, t+1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
+        s_int = t_int - 1
+        t_is_zero = (t_int == 0).float()  # Important to compute log p(x | z0)  [bs, 1] of 0, 1
+
+        # Normalize the times steps
+        # Step of s will never be used, since then p(x | z0) is computed.
+        s = s_int / self.T
+        t = t_int / self.T
+
+       # Compute gamma_s and gamma_t - these are for the noise schedule.
+        gamma_s = self.inflate_batch_array(self.gamma(s), x)
+        gamma_t = self.inflate_batch_array(self.gamma(t), x)
+
+        # Compute alpha_t and sigma_t from gamma - these are the means and standard deviations of the normal distribution for the noise that
+        # will be added to the position and feature vectors
+        alpha_t = self.alpha(gamma_t, x)  # [bs, 1, 1]
+        sigma_t = self.sigma(gamma_t, x)
+
+        # Sample noise from zt ~ Normal(alpha_t x, sigma_t)
+        eps = self.sample_combined_position_feature_noise(
+            n_samples=x.size(0), n_nodes=x.size(1), node_mask=node_mask, com_free=self.com_free)  # [bs, n_nodes, dims] - masks out non-atom indexes
+
+        # Concatenate x, h[integer] and h[categorical].
+        xh = torch.cat([x, h['categorical'], h['integer']], dim=2)  # [bs, n_nodes, dims]
+
+        # Sample noisy observation z_t given x, h for timestep t, from q(z_t | x, h)
+        # Appy the COMfree trick
+        if self.use_noised_x:
+            z_t = alpha_t * xh + sigma_t * eps
+        else:
+            z_t = xh
+        if self.com_free:
+            diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)
+
+
+        # Using our model to predict the denoised version of z_t 
+        if self.com_free:
+            out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
+
+        return out
 
     def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False):
         """Samples from zs ~ p(zs | zt). Only used during sampling."""
