@@ -359,6 +359,7 @@ parser.add_argument('--model_loc', type=str, default="Location of DiT Gaussian D
 
 # Arguments for stochasticiy
 parser.add_argument("--gamma_samples_stochasticity", type=int, default=5000, help="Number of samples to check the stochasticity of gamma")
+parser.add_argument("--num_mols", type=int, default=10, help="Number of molecules to check the stochasticity of gamma")
 parser.add_argument('--return_gamma', action="store_true")  # default from EDM
 
 
@@ -462,60 +463,44 @@ test_loader = dataloaders['test']
 n_iterations = len(test_loader)
 dtype = torch.float32
 gamma_samples_stochasticity = args.gamma_samples_stochasticity
-for i, data in tqdm(enumerate(test_loader)):
-    x = data["positions"].to(device, dtype) 
-    node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
-    edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
-    one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
-    charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
+k_mols = args.num_mols
+for j in range(k_mols):
+    for i, data in tqdm(enumerate(test_loader)):
+        x = data["positions"].to(device, dtype) 
+        node_mask = data['atom_mask'].to(device, dtype).unsqueeze(2)  # [bs, n_nodes, 1]
+        edge_mask = data['edge_mask'].to(device, dtype)  # [bs*n_nodes^2, 1]
+        one_hot = data['one_hot'].to(device, dtype)  # [bs, n_nodes, num_classes - i.e. 5 for qm9]
+        charges = (data['charges'] if args.include_charges else torch.zeros(0)).to(device, dtype)  # [bs, n_nodes, 1]
 
-    x = remove_mean_with_mask(x, node_mask)
+        x = remove_mean_with_mask(x, node_mask)
 
-    # Get a single datapoint by sampling from 0 to batch size
-    idx = random.randint(0, x.size(0)-1)
-    x = x[idx, :, :]
-    node_mask = node_mask[idx, :, :]
-    one_hot = one_hot[idx, :, :]
-    charges = charges[idx, :, :]
+        # Get a single datapoint by sampling from 0 to batch size
+        idx = random.randint(0, x.size(0)-1)
+        x = x[idx, :, :]
+        node_mask = node_mask[idx, :, :]
+        one_hot = one_hot[idx, :, :]
+        charges = charges[idx, :, :]
 
-    # Repeat, x, node_mask, one_hot and charges gamma_samples_stochasticity times
-    x = x.repeat(gamma_samples_stochasticity, 1, 1)
-    node_mask = node_mask.repeat(gamma_samples_stochasticity, 1, 1)
-    one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
-    charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
-    h = {'categorical': one_hot, 'integer': charges}
-    t = torch.randint(1, 2, size=(gamma_samples_stochasticity, 1), device=x.device).float()
-
-
-    # Pass through the model's _forward argument which takes in t, xh, node_mask, edge_mask, context, gamma=None
-    xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
-    xh, gamma = model_ema.dynamics._forward(t, xh, node_mask, edge_mask, context=None)
-
-    # Convert xh and gamma to numpy arrays
-    xh = xh.detach().cpu().numpy()
-    gamma = gamma.detach().cpu().numpy()
-
-    # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
-    np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_gamma_samples.npy", gamma)
-    np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_xh_samples.npy", xh)
-
-    # Print shapes of xh and gamma
-    print(f"xh.shape: {xh.shape}, gamma.shape: {gamma.shape}")
-
-    # Print types of xh and gamma
-    print(f"xh.dtype: {xh.dtype}, gamma.dtype: {gamma.dtype}")
-    print(f"type(xh): {type(xh)}, type(gamma): {type(gamma)}")
+        # Repeat, x, node_mask, one_hot and charges gamma_samples_stochasticity times
+        x = x.repeat(gamma_samples_stochasticity, 1, 1)
+        node_mask = node_mask.repeat(gamma_samples_stochasticity, 1, 1)
+        one_hot = one_hot.repeat(gamma_samples_stochasticity, 1, 1)
+        charges = charges.repeat(gamma_samples_stochasticity, 1, 1)
+        h = {'categorical': one_hot, 'integer': charges}
+        t = torch.randint(1, 2, size=(gamma_samples_stochasticity, 1), device=x.device).float()
 
 
-    # Print the shapes and types
-    print(f"xh.shape: {xh.shape}, xh.dtype: {xh.dtype}, {type(xh)}")
-    print(f"x.shape: {x.shape}, x.dtype: {x.dtype}, {type(x)}")
-    print(f"node_mask.shape: {node_mask.shape}, node_mask.dtype: {node_mask.dtype}, {type(node_mask)}")
-    print(f"edge_mask.shape: {edge_mask.shape}, edge_mask.dtype: {edge_mask.dtype}, {type(edge_mask)}")
-    print(f"one_hot.shape: {one_hot.shape}, one_hot.dtype: {one_hot.dtype}, {type(one_hot)}")
-    print(f"charges.shape: {charges.shape}, charges.dtype: {charges.dtype}, {type(charges)}")
+        # Pass through the model's _forward argument which takes in t, xh, node_mask, edge_mask, context, gamma=None
+        xh = torch.cat([x, h['categorical'], h['integer']], dim=2)
+        xh, gamma = model_ema.dynamics._forward(t, xh, node_mask, edge_mask, context=None)
 
+        # Convert xh and gamma to numpy arrays
+        xh = xh.detach().cpu().numpy()
+        gamma = gamma.detach().cpu().numpy()
 
+        # Save them in /data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{exp_name}/stochastic_gamma_samples.npy and stochastic_xh_samples.npy
+        np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_gamma_samples_{j}.npy", gamma)
+        np.save(f"/data/localhost/not-backed-up/users/ashouritaklimi/symdiff/outputs/{args.exp_name}/stochastic_xh_samples_{j}.npy", xh)
 
-    break
+        break
 
