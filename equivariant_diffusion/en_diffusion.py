@@ -902,7 +902,7 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Using our model to predict the denoised version of z_t 
         if self.com_free:
-            out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
+            out = self.dynamics._forward(t, z_t, node_mask, edge_mask, context)
 
         return out
 
