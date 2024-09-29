@@ -128,6 +128,8 @@ def main():
                         help='Whether we should apply data augmentation for sampling')                        
     parser.add_argument("--suffix_save", type=str, default=None, 
                         help="Suffix for eval_logs")
+    parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -151,6 +153,7 @@ def main():
 
     args.suffix_save = eval_args.suffix_save
     args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.return_gamma = eval_args.return_gamma
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
     dtype = torch.float32
