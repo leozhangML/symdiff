@@ -29,3 +29,5 @@ qm9_conditional.sh
 figures/
 test.py
 view_data.ipynb
+*.npy
+.npy
