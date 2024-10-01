@@ -17,6 +17,10 @@ class EGNN_dynamics_QM9(nn.Module):
         """
 
         super().__init__()
+        self.return_gamma = None
+        self.return_gamma_backbone = None
+        self.use_noise_x = None        
+
         self.mode = mode
         if mode == 'egnn_dynamics':
             # always set in_edge_nf=1?

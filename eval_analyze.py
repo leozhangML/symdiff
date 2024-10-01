@@ -158,6 +158,7 @@ def main():
     args.return_gamma = eval_args.return_gamma
     args.return_gamma_backbone = eval_args.return_gamma_backbone
     args.use_noise_x = eval_args.use_noise_x
+    print("ARGE NOISE X:", args.use_noise_x)
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
     dtype = torch.float32
