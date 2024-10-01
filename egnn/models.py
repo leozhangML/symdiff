@@ -56,13 +56,14 @@ class EGNN_dynamics_QM9(nn.Module):
     def unwrap_forward(self):
         return self._forward
 
-    def _forward(self, t, xh, node_mask, edge_mask, context):  # used in phi for training
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):  # used in phi for training
         """
         t: [bs] or [1]
         xh: [bs, n_nodes, dims] - contains pos, cat h, int h
         node_mask: [bs, n_nodes]
         edge_masks [bs*n_nodes^2, 1]
         context: ?
+        gamma: dummy variable for compatibility with phi
 
         Just need to accept [bs, n_nodes, dim] for xh (add conditioning info) and accept node_mask for
         correct masking - need some projection matrix for correct dims?
