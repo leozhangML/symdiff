@@ -1868,6 +1868,9 @@ class DiTGaussian_dynamics(nn.Module):
 
         self.args = args
         self.n_dims = n_dims
+        self.return_gamma = args.return_gamma
+        self.return_gamma_backbone = args.return_gamma_backbone
+        self.use_noise_x = args.use_noise_x        
 
         self.gaussian_embedder = GaussianLayer(K=K)
 
