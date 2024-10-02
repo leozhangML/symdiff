@@ -216,8 +216,8 @@ def plot_gamma_hist(args, iter_dataloader, generative_model, n=5):
     print(torch.norm(xh - xh0))
 
     fig, axes = plt.subplots(1, 1, figsize=(15, 8))
-    _ = axes.hist(angles_model, bins=100, alpha=0.5, label="model")
-    _ = axes.hist(angles_gamma, bins=100, alpha=0.5, label="gamma")
+    #_ = axes.hist(angles_model, bins=100, alpha=0.5, label="model")
+    _ = axes.hist(angles_gamma, bins=1000, alpha=0.5, label="gamma")
     fig.suptitle(f"{args.exp_name}\nplot_gamma_hist: n={n}")
     save_fig(args, fig)
 
@@ -421,6 +421,17 @@ def convert_x_to_xh(x):
     h = torch.zeros(len(x), 2, 1, device=x.device)
     return torch.cat([x, h], dim=-1)
 
+def plot_haar_hist(args, n=1000):
+
+    g = orthogonal_haar(dim=2, target_tensor=torch.empty(n, device=args.device))
+    angles = compute_angles(g)
+    angles = convert_cpu_detach(angles)
+
+    fig, axes = plt.subplots(1, 1, figsize=(15, 8))
+    _ = axes.hist(angles, bins=1000, alpha=0.5, label="gamma")
+    fig.suptitle(f"{args.exp_name}\nplot_haar_hist: n={n}")
+    save_fig(args, fig)
+    
 
 def main():
     
@@ -443,6 +454,8 @@ def main():
     parser.add_argument('--n_importance_samples', type=int, default=1)
 
     parser.add_argument('--return_iwae_nll', action="store_true")
+
+    parser.add_argument('--haar_hist', action="store_true")
     
     eval_args = parser.parse_args()
 
@@ -462,6 +475,7 @@ def main():
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     device = torch.device("cuda" if args.cuda else "cpu")
+    print(f"device={device}")
     args.device = device
     dtype = torch.float32
 
@@ -523,8 +537,8 @@ def main():
     # plot gamma distribution
     if eval_args.visualise_gamma_hist:
         print("\nplotting histogram of gamma")
-        plot_gamma_hist(args, iter_val_dataloader, generative_model, n=1000)
-        check_stoc_equivariance_gamma_hist(args, iter_val_dataloader, generative_model, n=1000, use_model=False)
+        plot_gamma_hist(args, iter_val_dataloader, generative_model, n=20000)
+        check_stoc_equivariance_gamma_hist(args, iter_val_dataloader, generative_model, n=10000, use_model=False)
 
     # check stochastic equivariance
     if eval_args.visualise_stoc_eq:
@@ -552,6 +566,10 @@ def main():
             args, dataloaders["valid"], 0, generative_model, device, 
             dtype, None, None, partition="Valid")
         print(f"\nnll: {nll}, iwae_nll: {iwae_nll}")
+
+    if eval_args.haar_hist:
+        print("Showing hist of haar")
+        plot_haar_hist(args, n=20000)
 
 
 if __name__ == "__main__":
