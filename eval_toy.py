@@ -434,7 +434,7 @@ def plot_haar_hist(args, n=1000):
     
 
 def main():
-    
+
     parser = argparse.ArgumentParser(description='eval_toy_experiment')
     parser.add_argument('--model_path', type=str, default="")
     parser.add_argument('--plots_path', type=str, default="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots")

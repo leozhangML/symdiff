@@ -21,6 +21,8 @@ from qm9.utils import prepare_context, compute_mean_mad
 from qm9 import visualizer as qm9_visualizer
 import qm9.losses as losses
 
+from sym_nn.visualise_gamma import get_samples, sample_gamma
+
 try:
     from qm9 import rdkit_functions
 except ModuleNotFoundError:
@@ -124,15 +126,25 @@ def main():
                         help='Should save samples to xyz files.')
     parser.add_argument("--datadir", type=str, default=None, 
                         help="Use if trained on a different node")
+
+    # options for what eval metrics to compute
+    parser.add_argument("--compute_chemical_metrics", action="store_true")
+    parser.add_argument("--compute_nll", action="store_true")
     
-    parser.add_argument("--skip_chemical_metrics", action="store_true")
+    parser.add_argument("--model_equivariance_metric", action="store_true")
 
     parser.add_argument("--return_iwae_nll", action="store_true")
     parser.add_argument('--n_importance_samples', type=int, default=10)
 
+    parser.add_argument("--visualise_gamma", action="store_true")
+
+    # plot path
+    parser.add_argument('--plots_path', type=str, default="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots")
 
     eval_args, unparsed_args = parser.parse_known_args()
 
+
+    # load training args
     assert eval_args.model_path is not None
 
     with open(join(eval_args.model_path, 'args.pickle'), 'rb') as f:
@@ -141,6 +153,7 @@ def main():
     if eval_args.datadir is not None:
         print("Using different datadir!")
         args.datadir = eval_args.datadir
+
 
     # NOTE: CAREFUL with this -->
     if not hasattr(args, 'normalization_factor'):
@@ -174,6 +187,7 @@ def main():
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device
     dtype = torch.float32
+    args.dtype = dtype
     utils.create_folders(args)
     print(args)
 
@@ -193,9 +207,9 @@ def main():
     flow_state_dict = torch.load(join(eval_args.model_path, fn), map_location=device)
     generative_model.load_state_dict(flow_state_dict)
 
-    if eval_args.skip_chemical_metrics:
+    # Analyze stability, validity, uniqueness and novelty with nodes_dist
+    if eval_args.compute_chemical_metrics:
 
-        # Analyze stability, validity, uniqueness and novelty with nodes_dist
         stability_dict, rdkit_metrics = analyze_and_save(
             args, eval_args, device, generative_model, nodes_dist,
             prop_dist, dataset_info, n_samples=eval_args.n_samples,
@@ -224,24 +238,33 @@ def main():
         args.model_equivariance_metric = True
 
     # Evaluate negative log-likelihood for the validation and test partitions
-    val_nll, val_model_metric, val_backbone_metric, val_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
-                   dataloaders[val_name],
-                   partition='Val')
-    print(f'Final val nll {val_nll}')
-    test_nll, test_model_metric, test_backbone_metric, test_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
-                    dataloaders['test'],
-                    partition='Test', num_passes=num_passes)
-    print(f'Final test nll {test_nll}')
+    if eval_args.compute_nll:
 
-    print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
-    print(f"(Val) model metric: {val_model_metric}, backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}")
-    print(f"(Test) model metric: {test_model_metric}, backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}")
-    with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
-        print(f'Overview: val nll {val_nll}, test nll {test_nll}, (Val) model metric: {val_model_metric}, \
-              backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}, (Test) model metric: {test_model_metric}, \
-                backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}',
-              stability_dict,
-              file=f)
+        val_nll, val_model_metric, val_backbone_metric, val_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
+                       dataloaders[val_name],
+                       partition='Val')
+        print(f'Final val nll {val_nll}')
+
+        test_nll, test_model_metric, test_backbone_metric, test_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
+                        dataloaders['test'],
+                        partition='Test', num_passes=num_passes)
+        print(f'Final test nll {test_nll}')
+
+        print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
+        print(f"(Val) model metric: {val_model_metric}, backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}")
+        print(f"(Test) model metric: {test_model_metric}, backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}")
+        with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
+            print(f'Overview: val nll {val_nll}, test nll {test_nll}, (Val) model metric: {val_model_metric}, \
+                  backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}, (Test) model metric: {test_model_metric}, \
+                    backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}',
+                stability_dict,
+                file=f)
+
+    # visualise gamma
+    if eval_args.visualise_gamma:
+
+        z_t, t, node_mask = get_samples(args, generative_model, dataloaders['train'])
+        sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples=100)
 
 
 if __name__ == "__main__":
