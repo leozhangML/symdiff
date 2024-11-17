@@ -3,13 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import datetime
 import os
+from itertools import combinations
+from sklearn.decomposition import PCA
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from equivariant_diffusion.utils import assert_mean_zero_with_mask, remove_mean_with_mask, \
      assert_correctly_masked, sample_center_gravity_zero_gaussian_with_mask
 from equivariant_diffusion import utils as diffusion_utils
 
-from sym_nn.utils import orthogonal_haar
+from sym_nn.utils import orthogonal_haar, qr
 
 def rotation_matrix_to_euler_angles(R):
     """
@@ -61,7 +63,7 @@ def convert_gamma_to_coords(gamma: torch.Tensor):
     ]
     return torch.stack(euler_angles, dim=0).numpy()
 
-def create_interactive_plot(embeddings):
+def create_interactive_plot(embeddings, title=""):
     """
     Creates multiple views of the same 3D embedding for better visualization.
     
@@ -71,7 +73,8 @@ def create_interactive_plot(embeddings):
     """
     # Create a figure with multiple views
     fig = plt.figure(figsize=(20, 5))
-    
+    fig.suptitle(title)
+
     # Different viewing angles
     views = [
         (30, 45),    # Standard view
@@ -80,7 +83,7 @@ def create_interactive_plot(embeddings):
         (90, 0)      # Top view
     ]
     view_names = ['Standard View', 'Front View', 'Side View', 'Top View']
-    
+
     for i, ((elev, azim), name) in enumerate(zip(views, view_names), 1):
         ax = fig.add_subplot(1, 4, i, projection='3d')
         
@@ -88,16 +91,40 @@ def create_interactive_plot(embeddings):
             embeddings[:, 0],
             embeddings[:, 1],
             embeddings[:, 2],
-            alpha=0.3,
-            s=30
+            alpha=0.2,
+            s=10
         )
-        
+
         # Customize subplot
         ax.set_title(name)
         ax.view_init(elev, azim)
         if i == 1:  # Only add legend to first plot
             ax.legend(bbox_to_anchor=(1.15, 1), loc='upper left')
     
+    plt.tight_layout()
+    return fig
+
+def create_hist2d_plot(coords, title=""):
+    """
+    Creates 2D histograms of different projections.
+
+    Args:
+        coords: np.array of shape (n_samples, 3)
+        title: string for the figure title
+    """
+    # create figure
+    fig = plt.figure(figsize=(20, 5))
+    fig.suptitle(title)
+
+    # different projections
+    angle_names = ["phi", "theta", "psi"]
+    idxs = [0, 1, 2]
+
+    for i, (idx1, idx2) in enumerate(combinations(idxs, 2), 1):
+        ax = fig.add_subplot(1, 3, i)
+        ax.hist2d(coords[:, idx1], coords[:, idx2], bins=100)
+        ax.set_title(f"{angle_names[idx1]}/{angle_names[idx2]}")
+
     plt.tight_layout()
     return fig
 
@@ -174,16 +201,156 @@ def save_fig(args, fig):
     fig.savefig(fig_path)
     plt.close()
 
-def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples):
-    # above are just one sample
+@torch.no_grad()
+def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ignore_x=False, use_haar_out=False):
+    """
+    Plots a histogram of the norms and cosine metric of the gamma encoder, as well as
+    the PCA components of gamma encoder.
+    """
+    bs, n_nodes, _ = x.shape
 
+    print(f"use_haar={use_haar}")
+    print(f"ignore_x={ignore_x}")
+
+    if use_haar:
+        g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)  # [bs, 3, 3]
+    else:
+        g = torch.eye(3, device=x.device)[None, ...].repeat_interleave(bs, dim=0)
+
+    N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+    #pos_emb_test = generative_model.dynamics.gaussian_embedder_test(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
+    #pos_emb_test = torch.sum(generative_model.dynamics.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, pos_embedder_test]
+
+    g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
+
+    g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
+
+    if generative_model.dynamics.noise_dims > 0:
+        print("USING NOISE DIMS > 0!")
+        
+        g_inv_x = torch.cat([
+            g_inv_x, 
+            node_mask * generative_model.dynamics.noise_std * torch.randn(
+                bs, n_nodes, generative_model.dynamics.noise_dims, device=generative_model.dynamics.device
+                )
+            ], dim=-1)
+        
+
+        # remove noise
+        """
+        g_inv_x = torch.cat([
+            g_inv_x, 
+            node_mask * generative_model.dynamics.noise_std * torch.zeros(
+                bs, n_nodes, generative_model.dynamics.noise_dims, device=generative_model.dynamics.device
+                )
+            ], dim=-1)
+        """
+
+    if ignore_x:
+        g_inv_x = torch.zeros_like(g_inv_x, device=x.device)
+
+    #g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)
+
+    # [bs, n_nodes, hidden_size]
+    gamma = node_mask * generative_model.dynamics.gamma_enc(
+        g_inv_x, t.squeeze(-1), node_mask.squeeze(-1), 
+        use_final_layer=False
+        )
+
+    # extract gamma representations
+    gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size]
+
+    gamma_dec = generative_model.dynamics.gamma_dec(gamma)  # [bs, 9]
+
+    gamma_mat = qr(gamma_dec.reshape(-1, generative_model.n_dims, generative_model.n_dims))[0]
+    gamma_mat_coords = convert_gamma_to_coords(gamma_mat.detach().cpu())
+
+    if use_haar_out:
+        g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)
+    gamma_out = torch.bmm(gamma_mat, g.transpose(2, 1))
+    gamma_out_coords = convert_gamma_to_coords(gamma_out.detach().cpu())
+
+    # check gamma values
+    print("GAMMA ENCODER")
+    print(gamma[0])
+    print(gamma[-1])
+
+    print("GAMMA DECODER")
+    print(gamma_dec[0])
+    print(gamma_dec[-1])
+
+    # init cosine metric and PCA
+    cos = torch.nn.CosineSimilarity(dim=-1)
+    pca = PCA(n_components=2)
+
+    # plot metrics for gamma encoder
+    fig, axes = plt.subplots(3, 1, figsize=(20, 15))
+    fig.suptitle(f"gamma encoder: , use_haar={use_haar}, ignore_x={ignore_x}")
+
+    # gamma norms
+    gamma_norms = torch.norm(gamma, dim=-1)  # [bs]
+    axes[0].hist(gamma_norms.detach().cpu(), bins=100)
+    axes[0].set_title("gamma encoder norms")
+
+    # gamma cosine
+    ones = torch.ones_like(gamma, device=gamma.device)
+    cosine_metric = cos(ones, gamma)
+    axes[1].hist(cosine_metric.detach().cpu(), bins=100)
+    axes[1].set_title("cosine metric encoder wrt ones")
+
+    # gamma PCA
+    pca.fit(gamma.detach().cpu().numpy())
+    pca_x = pca.transform(gamma.detach().cpu().numpy())
+    axes[2].scatter(pca_x[:, 0], pca_x[:, 1], alpha=0.3)
+    axes[2].set_title(f"pca of gamma encoder: explained_variance_ratio={pca.explained_variance_ratio_}")
+
+    save_fig(args, fig)
+
+    # plot metrics for gamma decoder
+    fig, axes = plt.subplots(3, 1, figsize=(20, 15))
+    fig.suptitle(f"gamma decoder: t={t[0].item()}, use_haar={use_haar}, ignore_x={ignore_x}")
+
+    gamma_dec_norms = torch.norm(gamma_dec, dim=-1)
+    axes[0].hist(gamma_dec_norms.detach().cpu(), bins=100)
+    axes[0].set_title("gamma decoder norms")
+
+    ones = torch.ones_like(gamma_dec, device=gamma_dec.device)
+    cosine_metric_dec = cos(ones, gamma_dec)
+    axes[1].hist(cosine_metric_dec.detach().cpu(), bins=100)
+    axes[1].set_title("cosine metric decoder wrt ones")
+
+    pca.fit(gamma_dec.detach().cpu().numpy())
+    pca_x = pca.transform(gamma_dec.detach().cpu().numpy())
+    axes[2].scatter(pca_x[:, 0], pca_x[:, 1], alpha=0.3)
+    axes[2].set_title(f"pca of gamma decoder: explained_variance_ratio={pca.explained_variance_ratio_}")
+
+    save_fig(args, fig)
+
+    # plot euler angles for gamma mat
+    fig = create_interactive_plot(
+        gamma_mat_coords, title=f"gamma mat euler angles: t={t[0].item()}, use_haar={use_haar}, ignore_x={ignore_x}")
+    save_fig(args, fig)
+
+    # plot euler angles for gamma out
+    fig = create_interactive_plot(
+        gamma_out_coords, title=f"gamma out euler angles: t={t[0].item()}, use_haar={use_haar}, ignore_x={ignore_x}, use_haar_out={use_haar_out}")
+    save_fig(args, fig)
+
+@torch.no_grad()
+def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples):
+    # z_t: [1, n_nodes, n_dims+in_nodes_nf] etc.
+
+    # repeat inputs
     z_ts = z_t.repeat_interleave(num_samples, dim=0)
+    x_ts = z_ts[..., :3]
     ts = t.repeat_interleave(num_samples, dim=0)
     node_masks = node_mask.repeat_interleave(num_samples, dim=0)
 
-    gammas = generative_model.dynamics.gamma(ts, z_ts, node_masks)
+    # sample multiple gammas
+    gammas = generative_model.dynamics.gamma(ts, x_ts, node_masks)
 
-    coords = convert_gamma_to_coords(gammas)
+    # extract euler angles
+    coords = convert_gamma_to_coords(gammas.detach().cpu())
 
     # create folder for saving plots
     fig_folder_datatime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -194,5 +361,35 @@ def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_sampl
     except OSError:
         pass
 
-    fig = create_interactive_plot(gammas)
+    # plot 3d scatter plot of gamma
+    fig = create_interactive_plot(coords, title=f"t={t.item()}")
     save_fig(args, fig)
+
+    # plot projection heatmaps of gamma
+    fig = create_hist2d_plot(coords, title=f"t={t.item()}")
+    save_fig(args, fig)
+
+    # gamma
+    extract_gamma_enc(
+        args, generative_model, ts[:1000], 
+        x_ts[:1000], node_masks[:1000]
+        )
+
+    # gamma without haar
+    extract_gamma_enc(
+        args, generative_model, ts[:1000], 
+        x_ts[:1000], node_masks[:1000], use_haar=False
+        )
+
+    # gamma when ignoring x
+    extract_gamma_enc(
+        args, generative_model, ts[:1000], 
+        x_ts[:1000], node_masks[:1000], use_haar=False, 
+        ignore_x=True
+        )
+
+    # gamma_out with independent haar
+    extract_gamma_enc(
+        args, generative_model, ts[:1000], 
+        x_ts[:1000], node_masks[:1000], use_haar_out=True
+        )

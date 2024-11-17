@@ -226,7 +226,8 @@ class DiT(nn.Module):
         x_emb="fourier",
         tau=1.0,
         input_dim=9,
-        mlp_type="mlp"
+        mlp_type="mlp",
+        zero_final=True
     ):
         super().__init__()
 
@@ -234,6 +235,8 @@ class DiT(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_heads
         self.mlp_type = mlp_type
+
+        self.zero_final = zero_final
 
         self.x_emb = x_emb
         if x_emb == "fourier":
@@ -288,10 +291,11 @@ class DiT(nn.Module):
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
 
         # Zero-out output layers:
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
-        nn.init.constant_(self.final_layer.linear.weight, 0)
-        nn.init.constant_(self.final_layer.linear.bias, 0)
+        if self.zero_final:
+            nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
+            nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
+            nn.init.constant_(self.final_layer.linear.weight, 0)
+            nn.init.constant_(self.final_layer.linear.bias, 0)
 
         if self.mlp_type == "swiglu":
             for block in self.blocks:

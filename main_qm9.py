@@ -147,7 +147,11 @@ parser.add_argument("--print_grad_norms", action="store_true", help="whether to 
 parser.add_argument("--print_parameter_count", action="store_true", help="whether to show the gamma and k param count")
 
 parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
+parser.add_argument("--return_iwae_nll", action="store_true", help="whether to log the iwae estimates")
 parser.add_argument("--n_importance_samples", type=int, default=10, help="whether to log the equivariance metrics")
+
+parser.add_argument("--force_save_model", action="store_true", help="whether to force save the model at eval stage")
+parser.add_argument("--save_model_at_init", action="store_true", help="whether to force save the model at random init")
 
 # -------- DiTGaussian args -------- #
 
@@ -335,6 +339,17 @@ def main():
         wandb.log({"Epoch": epoch}, commit=True)
         print(f"--- Epoch {epoch} ---")
 
+        if args.save_model_at_init:  # saves models in symdiff/outputs/exp_name on ziz
+            utils.save_model(optim, 'outputs/%s/optim.npy' % args.exp_name)
+            utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
+            if scheduler is not None:
+                utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
+            if args.ema_decay > 0:
+                utils.save_model(model_ema, 'outputs/%s/generative_model_ema.npy' % args.exp_name)
+            with open('outputs/%s/args.pickle' % args.exp_name, 'wb') as f:
+                pickle.dump(args, f) 
+            break
+
         #print("TEST WITH VAL FIRST")
         #nll_val = test(args=args, loader=dataloaders['valid'], epoch=epoch, eval_model=model,
         #           partition='Val', device=device, dtype=dtype, nodes_dist=nodes_dist,
@@ -366,7 +381,10 @@ def main():
                             partition='Test', device=device, dtype=dtype,
                             nodes_dist=nodes_dist, property_norms=property_norms)
 
-            # add equivariance metrics here
+            nll_val = nll_val[0]
+            nll_test = nll_test[0]
+
+            # add equivariance metrics here - TODO: remove
             if args.use_equivariance_metric:
                 nll_val, model_metric_val, backbone_metric_val = nll_val
                 nll_test, model_metric_test, backbone_metric_test = nll_test
@@ -386,7 +404,7 @@ def main():
                         pickle.dump(args, f)
 
             # NOTE: added to save best model on mol stable
-            if mol_stable > best_mol_stable:
+            if mol_stable > best_mol_stable or args.force_save_model:
                 if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
                     utils.save_model(optim, 'outputs/%s/optim_ms.npy' % args.exp_name)
                     utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)

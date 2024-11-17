@@ -264,7 +264,7 @@ def main():
     if eval_args.visualise_gamma:
 
         z_t, t, node_mask = get_samples(args, generative_model, dataloaders['train'])
-        sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples=100)
+        sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples=10000)
 
 
 if __name__ == "__main__":

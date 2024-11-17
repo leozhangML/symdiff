@@ -7,7 +7,7 @@ from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import DiTGaussian_dynamics, DiT_DitGaussian_dynamics, DiTOnlyGaussian_dynamics, DeepSets_DitGaussian_dynamics, \
-                          Scalars_DitGaussian_dynamics
+                          Scalars_DitGaussian_dynamics, DiTFinal_DitGaussian_dynamics, DiTModPE_DitGaussian_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -98,8 +98,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             enc_mlp_ratio=args.enc_mlp_ratio,
 
             dec_hidden_features=args.dec_hidden_features,
-            #gamma_mlp_dropout=args.gamma_mlp_dropout,
-            gamma_mlp_dropout=args.gamma_dropout,
+            gamma_mlp_dropout=args.gamma_mlp_dropout,
+            #gamma_mlp_dropout=args.gamma_dropout,
 
             hidden_size=args.hidden_size,
             depth=args.depth,
@@ -116,7 +116,74 @@ def get_model(args, device, dataset_info, dataloader_train):
             n_dims=args.n_dims,
             device=device
         )
-    
+
+    elif args.model == "ditmodepe_dit_gaussian_dynamics":
+
+        net_dynamics = DiTModPE_DitGaussian_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            K=args.K,
+
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+
+            dec_hidden_features=args.dec_hidden_features,
+            gamma_mlp_dropout=args.gamma_mlp_dropout,
+            #gamma_mlp_dropout=args.gamma_dropout,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            mlp_type=args.mlp_type,
+
+            n_dims=args.n_dims,
+            device=device
+        )
+
+    elif args.model == "ditfinal_dit_gaussian_dynamics":
+
+        net_dynamics = DiTFinal_DitGaussian_dynamics(
+            args,
+            in_node_nf=in_node_nf,
+            context_node_nf=args.context_node_nf,
+
+            xh_hidden_size=args.xh_hidden_size,
+            K=args.K,
+            pos_embedder_test=args.pos_embedder_test,
+
+            enc_hidden_size=args.enc_hidden_size,
+            enc_depth=args.enc_depth,
+            enc_num_heads=args.enc_num_heads,
+            enc_mlp_ratio=args.enc_mlp_ratio,
+
+            gamma_mlp_dropout=args.gamma_mlp_dropout,
+
+            hidden_size=args.hidden_size,
+            depth=args.depth,
+            num_heads=args.num_heads,
+            mlp_ratio=args.mlp_ratio,
+            mlp_dropout=args.mlp_dropout,
+
+            noise_dims=args.noise_dims,
+            noise_std=args.noise_std,
+
+            mlp_type=args.mlp_type,
+
+            n_dims=args.n_dims,
+            device=device
+        )
+
     elif args.model == "deepsets_dit_gaussian_dynamics":
 
         net_dynamics = DeepSets_DitGaussian_dynamics(

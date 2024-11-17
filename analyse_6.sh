@@ -49,7 +49,7 @@ date -u
 
 #python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
 #python eval_analyze.py --model_path outputs/DiTGaussian_aug_ablate --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-python eval_analyze.py --model_path outputs/DiT_DiTGaussian_tune --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang --visualise_gamma
+python eval_analyze.py --model_path outputs/DiTModPE_DiTGaussian_random_init_less_noise_0_2 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang --visualise_gamma
 #python t.py
 
 date -u
