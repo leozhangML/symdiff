@@ -213,7 +213,8 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
     print(f"ignore_x={ignore_x}")
 
     if use_haar:
-        g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)  # [bs, 3, 3]
+        #g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)  # [bs, 3, 3]
+        g = generative_model.dynamics.base_gamma(t, x, node_mask)  # [bs, 3, 3]
     else:
         g = torch.eye(3, device=x.device)[None, ...].repeat_interleave(bs, dim=0)
 
@@ -223,7 +224,8 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
 
     g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
-    g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
+    #g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
+    g_inv_x = node_mask * generative_model.dynamics.gamma_projection(g_inv_x)
 
     if generative_model.dynamics.noise_dims > 0:
         print("USING NOISE DIMS > 0!")
@@ -234,7 +236,6 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
                 bs, n_nodes, generative_model.dynamics.noise_dims, device=generative_model.dynamics.device
                 )
             ], dim=-1)
-        
 
         # remove noise
         """
@@ -248,6 +249,8 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
 
     if ignore_x:
         g_inv_x = torch.zeros_like(g_inv_x, device=x.device)
+
+    #g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
 
     #g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)
 
@@ -266,7 +269,8 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
     gamma_mat_coords = convert_gamma_to_coords(gamma_mat.detach().cpu())
 
     if use_haar_out:
-        g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)
+        #g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)
+        g = generative_model.dynamics.base_gamma(t, x, node_mask)  # [bs, 3, 3]
     gamma_out = torch.bmm(gamma_mat, g.transpose(2, 1))
     gamma_out_coords = convert_gamma_to_coords(gamma_out.detach().cpu())
 
@@ -336,6 +340,14 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
         gamma_out_coords, title=f"gamma out euler angles: t={t[0].item()}, use_haar={use_haar}, ignore_x={ignore_x}, use_haar_out={use_haar_out}")
     save_fig(args, fig)
 
+    # look at base gamma
+    g = generative_model.dynamics.base_gamma(t, x, node_mask)
+    base_gamma_coords = convert_gamma_to_coords(g.detach().cpu())
+    fig = create_interactive_plot(
+        base_gamma_coords, title=f"base gamma euler angles: t={t[0].item()}")
+    save_fig(args, fig)
+
+
 @torch.no_grad()
 def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples):
     # z_t: [1, n_nodes, n_dims+in_nodes_nf] etc.
@@ -351,6 +363,8 @@ def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_sampl
 
     # extract euler angles
     coords = convert_gamma_to_coords(gammas.detach().cpu())
+
+    print(np.sum(np.isnan(coords)))
 
     # create folder for saving plots
     fig_folder_datatime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

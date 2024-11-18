@@ -192,6 +192,13 @@ parser.add_argument("--t_hidden_size", type=int, default=32, help="config for De
 parser.add_argument("--pos_emb_gamma_1_size", type=int, default=32, help="config for Deepsets")
 parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
 
+# -------- ScalarsDiT_DiTGaussian args -------- #
+
+parser.add_argument("--base_enc_hidden_size", type=int, default=64, help="config for ScalarsDiT_DiTGaussian")
+parser.add_argument("--base_enc_depth", type=int, default=4, help="config for ScalarsDiT_DiTGaussian")
+parser.add_argument("--base_enc_num_heads", type=int, default=4, help="config for ScalarsDiT_DiTGaussian")
+parser.add_argument("--base_enc_mlp_ratio", type=float, default=4.0, help="config for ScalarsDiT_DiTGaussian")
+
 
 args = parser.parse_args()
 args.molecule = True
@@ -389,7 +396,7 @@ def main():
                 nll_val, model_metric_val, backbone_metric_val = nll_val
                 nll_test, model_metric_test, backbone_metric_test = nll_test
 
-            if nll_val < best_nll_val:  # NOTE: maybe also save best molecular stability?
+            if nll_val < best_nll_val or args.force_save_model:  # NOTE: maybe also save best molecular stability?
                 best_nll_val = nll_val
                 best_nll_test = nll_test
                 if args.save_model:  # saves models in symdiff/outputs/exp_name on ziz
