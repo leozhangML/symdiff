@@ -9,7 +9,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=qm9_best_ddg_lr_2e_4
+#SBATCH --job-name=test_qm9_best_ddg_lr_2e_4
 
 # Using thet cluster swan and node 1 
 #SBATCH --cluster=swan
@@ -36,7 +36,7 @@ export PATH_TO_CONDA="/data/localhost/not-backed-up/users/$USER/miniconda3"
 source $PATH_TO_CONDA/bin/activate symdiff
 
 # Create central and local logging directories
-export LOCAL_LOGDIR="/data/localhost/not-backed-up/users/$USER/symdiff"
+export LOCAL_LOGDIR="/vols/bitbucket/$USER/symdiff"
 mkdir -p $LOCAL_LOGDIR/output
 mkdir -p $LOCAL_LOGDIR/slurm
 
@@ -47,8 +47,8 @@ date -u
 
 # Run main script
 # Arguments ignored: --enc_concat_h
-cd /data/localhost/not-backed-up/users/$USER/symdiff
-python /data/localhost/not-backed-up/users/$USER/symdiff/main_qm9.py --exp_name qm9_best_ddg_lr_2e_4 --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/localhost/not-backed-up/users/$USER/data/ \
+cd /vols/bitbucket/$USER/symdiff
+python /vols/bitbucket/$USER/symdiff/main_qm9.py --exp_name test_qm9_best_ddg_lr_2e_4 --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/localhost/not-backed-up/users/$USER/data/ \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 5000 --batch_size 256 --lr 2e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
