@@ -186,6 +186,46 @@ parser.add_argument('--sequential', action='store_true',
                     help='Organize data by size to reduce average memory usage.')     # This is for GNNs, keep it off
 args = parser.parse_args()
 
+##########################################################################################################################
+
+
+# Seprate arguments for dropout        
+parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
+parser.add_argument("--dropout_gamma_enc", type=float, default=0.0, help="Dropout for gamma encoder")
+parser.add_argument("--dropout_gamma_dec", type=float, default=0.0, help="Dropout for gamma decoder")
+parser.add_argument("--dropout_k", type=float, default=0.0, help="Dropout for k")
+
+
+# Positional embeddings
+parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+parser.add_argument("--gamma_K", type=float, default=0, help="K for gamma positional embeddings")
+parser.add_argument("--k_K", type=float, default=0, help="K for k positional embeddings")
+parser.add_argument("--pos_emb_gamma_projection_dim", type=float, default=0, help="Dimension of the projection for gamma positional embeddings")
+
+
+parser.add_argument("--freeze_model_parts", action="store_true", help="Whether to freeze the model parts")
+parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
+parser.add_argument("--path_to_load_backbone", type=str, default="", help="Path to load the backbone model from, if loading only the backbone")
+parser.add_argument("--type_backbone_to_load", type=str, default="", help="Whether to load the EMA backbone or the normal backbone: EMA or normal")
+
+# Data aug at sampling
+parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
+
+# Arguments for equivariance metrics
+parser.add_argument("--use_equivariance_metric", action="store_true", help="whether to log the equivariance metrics")
+parser.add_argument("--n_importance_samples", type=int, default=32, help="whether to log the equivariance metrics")
+parser.add_argument('--n_dims', type=int, default=3)
+
+parser.add_argument('--return_gamma', action="store_true")  # default from EDM
+parser.add_argument('--return_gamma_backbone', action="store_true")  # default from EDM
+parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
+
+parser.add_argument('--remove_conditioning_time_gamma', type=bool, default=False)
+parser.add_argument('--fixed_gamma_time_value', type=int, default=0)
+parser.add_argument("--t_hidden_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
+
 
 ##########################################################################################################################
 

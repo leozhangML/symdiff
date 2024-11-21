@@ -132,6 +132,16 @@ def main():
     parser.add_argument('--return_gamma_backbone', action="store_true")  # default from EDM
     parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
 
+    # Removing conditioning on time for our gamma encoder
+    parser.add_argument('--remove_conditioning_time_gamma', type=bool, default=False)
+    parser.add_argument('--fixed_gamma_time_value', type=int, default=0)
+
+    # Arguments for scalars DiT Gaussian
+
+    parser.add_argument("--t_hidden_size", type=int, default=32, help="config for Deepsets")
+    parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
+    parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
+
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -158,6 +168,12 @@ def main():
     args.return_gamma = eval_args.return_gamma
     args.return_gamma_backbone = eval_args.return_gamma_backbone
     args.use_noise_x = eval_args.use_noise_x
+    args.remove_conditioning_time_gamma = eval_args.remove_conditioning_time_gamma
+    args.fixed_gamma_time_value = eval_args.fixed_gamma_time_value
+    args.t_hidden_size = eval_args.t_hidden_size
+    args.pos_emb_gamma_size = eval_args.pos_emb_gamma_size
+    args.gamma_1_hidden_size = eval_args.gamma_1_hidden_size    
+
     print("ARGE NOISE X:", args.use_noise_x)
     device = torch.device("cuda" if args.cuda else "cpu")
     args.device = device

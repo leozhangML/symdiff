@@ -25,6 +25,9 @@ from qm9.utils import prepare_context, compute_mean_mad
 import train_test
 from train_test import train_epoch, test, analyze_and_save
 
+import GPUtil
+import psutil
+import os
 
 
 ################## General arguments ##################
@@ -240,9 +243,58 @@ parser.add_argument('--return_gamma_backbone', action="store_true")  # default f
 parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
 
 
+##########################################################################################################################
+
+
+# Positional embeddings
+parser.add_argument("--path_to_load_backbone", type=str, default="", help="Path to load the backbone model from, if loading only the backbone")
+parser.add_argument("--type_backbone_to_load", type=str, default="", help="Whether to load the EMA backbone or the normal backbone: EMA or normal")
+
+parser.add_argument('--remove_conditioning_time_gamma', type=bool, default=False)
+parser.add_argument('--fixed_gamma_time_value', type=int, default=0)
+parser.add_argument("--t_hidden_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
+
+########################################################################################################################
+
+
+# Helper functions:
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+def log_disk_usage(model_path):
+    model_size = os.path.getsize(model_path)
+
+def log_ram_usage():
+    process = psutil.Process()
+    ram_usage = process.memory_info().rss  # in bytes
+    return ram_usage
+
+def get_vram_usage():
+    gpus = GPUtil.getGPUs()
+    if gpus:
+        return gpus[0].memoryUsed
+    else:
+        return 0
+
+########################################################################################################################
+
+# Getting the dataset
+gpus = GPUtil.getGPUs()
+# Check if GPUs are available
+if gpus:
+    print("Available GPUs:")
+    for i, gpu in enumerate(gpus):
+        print(f"GPU {i}:")
+        print(f"  Name: {gpu.name}")
+        print(f"  ID: {gpu.id}")
+        print(f"  Memory Total: {gpu.memoryTotal} MB")
+        print(f"  Memory Used: {gpu.memoryUsed} MB")
+        print(f"  Memory Free: {gpu.memoryFree} MB")
+        print(f"  Load: {gpu.load * 100:.2f}%")
+        print(f"  Temperature: {gpu.temperature} °C")
+
 args = parser.parse_args()
-
-
 
 ##########################################################################################################################
 
@@ -417,13 +469,26 @@ def main():
         wandb.log({"Epoch": epoch}, commit=True)
         print(f"--- Epoch {epoch} ---")        
         start_epoch = time.time()
+        ram_start = log_ram_usage()    
+        wandb.log({"RAM usage at start of epoch": ram_start}, commit=True)
+
+        vram_start = get_vram_usage()
+        wandb.log({"VRAM usage at start of epoch": vram_start}, commit=True)
+
 
         # Train for one epoch
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
                     nodes_dist=nodes_dist, dataset_info=dataset_info,
                     gradnorm_queue=gradnorm_queue, optim=optim, scheduler=scheduler, prop_dist=prop_dist)
+        
+        ram_end = log_ram_usage()
+        wandb.log({"RAM usage at end of epoch": ram_end}, commit=True)
+
+        vram_end = get_vram_usage()
+        wandb.log({"VRAM usage at end of epoch": vram_end}, commit=True)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
+
 
         # Check if we should test the model (last, first, or every test_epochs)
         if epoch % args.test_epochs == 0 or epoch == args.n_epochs - 1 or epoch == start_epoch: 

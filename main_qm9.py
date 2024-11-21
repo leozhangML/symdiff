@@ -18,9 +18,11 @@ from equivariant_diffusion import utils as flow_utils
 import torch
 import time
 import pickle
+import psutil
 from qm9.utils import prepare_context, compute_mean_mad
 from train_test import train_epoch, test, analyze_and_save
 
+import GPUtil
 import os
 print(f"os.getcwd(): {os.getcwd()}")
 
@@ -301,8 +303,6 @@ parser.add_argument("--k_K", type=float, default=0, help="K for k positional emb
 parser.add_argument("--pos_emb_gamma_projection_dim", type=float, default=0, help="Dimension of the projection for gamma positional embeddings")
 
 
-
-
 # -------- sym_diff time args -------- #
 
 parser.add_argument("--enc_gnn_layers", type=int, default=2, help="config for DiTMessage")
@@ -322,7 +322,6 @@ parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which 
 parser.add_argument("--path_to_load_backbone", type=str, default="", help="Path to load the backbone model from, if loading only the backbone")
 parser.add_argument("--type_backbone_to_load", type=str, default="", help="Whether to load the EMA backbone or the normal backbone: EMA or normal")
 
-
 # Data aug at sampling
 parser.add_argument("--data_aug_at_sampling", action="store_true", help="Whether to augment data at sampling time")
 
@@ -335,10 +334,56 @@ parser.add_argument('--return_gamma', action="store_true")  # default from EDM
 parser.add_argument('--return_gamma_backbone', action="store_true")  # default from EDM
 parser.add_argument('--use_noise_x', action="store_true")  # default from EDM
 
+# Removing conditioning on time for our gamma encoder
+parser.add_argument('--remove_conditioning_time_gamma', type=bool, default=False)
+parser.add_argument('--fixed_gamma_time_value', type=int, default=0)
+
+# Arguments for scalars DiT Gaussian
+
+parser.add_argument("--t_hidden_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
+parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
 
 
+########################################################################################################################
+
+
+# Helper functions:
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+def log_disk_usage(model_path):
+    model_size = os.path.getsize(model_path)
+
+def log_ram_usage():
+    process = psutil.Process()
+    ram_usage = process.memory_info().rss  # in bytes
+    return ram_usage
+
+def get_vram_usage():
+    gpus = GPUtil.getGPUs()
+    if gpus:
+        return gpus[0].memoryUsed
+    else:
+        return 0
+
+########################################################################################################################
 
 # Getting the dataset
+gpus = GPUtil.getGPUs()
+# Check if GPUs are available
+if gpus:
+    print("Available GPUs:")
+    for i, gpu in enumerate(gpus):
+        print(f"GPU {i}:")
+        print(f"  Name: {gpu.name}")
+        print(f"  ID: {gpu.id}")
+        print(f"  Memory Total: {gpu.memoryTotal} MB")
+        print(f"  Memory Used: {gpu.memoryUsed} MB")
+        print(f"  Memory Free: {gpu.memoryFree} MB")
+        print(f"  Load: {gpu.load * 100:.2f}%")
+        print(f"  Temperature: {gpu.temperature} °C")
+
+
 args = parser.parse_args()
 dataset_info = get_dataset_info(args.dataset, args.remove_h)  # get configs for qm9 etc.
 atom_encoder = dataset_info['atom_encoder']
@@ -388,7 +433,6 @@ utils.create_folders(args)
 print(args)
 
 
-# TODO: COME BACK TO
 # Wandb config
 if args.no_wandb:
     mode = 'disabled'
@@ -401,10 +445,10 @@ kwargs = {'name': args.exp_name, 'project': 'e3_diffusion', 'config': args,
 wandb.init(**kwargs)
 wandb.save('*.txt')
 
+
 # Retrieve QM9 dataloaders
 dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
 data_dummy = next(iter(dataloaders['train']))
-
 
 if len(args.conditioning) > 0:
     print(f'Conditioning on {args.conditioning}')
@@ -417,6 +461,7 @@ else:
 
 args.context_node_nf = context_node_nf
 
+
 # Create EGNN flow
 # vdm (with net), DistributionNodes (sample to get num of nodes), DistributionProperty (if conditioning)
 # note that nodes_dist.sample is not filtered
@@ -425,6 +470,7 @@ model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders
 if prop_dist is not None:  # when conditioning
     prop_dist.set_normalizer(property_norms)
 model = model.to(device)
+
 
 # Get optimiser or optimisers
 if args.use_separate_optimisers:
@@ -529,11 +575,23 @@ def main():
         print(f"--- Epoch {epoch} ---")
 
         start_epoch = time.time()
+        ram_start = log_ram_usage()    
+        wandb.log({"RAM usage at start of epoch": ram_start}, commit=True)
+
+        vram_start = get_vram_usage()
+        wandb.log({"VRAM usage at start of epoch": vram_start}, commit=True)
+
+
         train_epoch(args=args, loader=dataloaders['train'], epoch=epoch, model=model, model_dp=model_dp,
                     model_ema=model_ema, ema=ema, device=device, dtype=dtype, property_norms=property_norms,
                     nodes_dist=nodes_dist, dataset_info=dataset_info,
                     gradnorm_queue=gradnorm_queue, optim=optim, optim_gamma=optim_gamma, optim_K=optim_K,
                     scheduler=scheduler, prop_dist=prop_dist)
+        ram_end = log_ram_usage()
+        wandb.log({"RAM usage at end of epoch": ram_end}, commit=True)
+
+        vram_end = get_vram_usage()
+        wandb.log({"VRAM usage at end of epoch": vram_end}, commit=True)
         print(f"Epoch took {time.time() - start_epoch:.1f} seconds.")
 
         if epoch % args.test_epochs == 0 or epoch == args.n_epochs - 1 or epoch == args.start_epoch:
@@ -570,6 +628,9 @@ def main():
                         utils.save_model(optim_gamma, 'outputs/%s/optim_gamma.npy' % args.exp_name)
 
                     utils.save_model(model, 'outputs/%s/generative_model.npy' % args.exp_name)
+                    model_path = f'outputs/{args.exp_name}/generative_model.npy'
+                    disk_usage = log_disk_usage(model_path)
+                    wandb.log({"Disk usage after saving best NLL model": disk_usage}, commit=True)
                     if scheduler is not None:
                         utils.save_model(scheduler, 'outputs/%s/scheduler.npy' % args.exp_name)
 
@@ -591,6 +652,9 @@ def main():
                         utils.save_model(optim_K, 'outputs/%s/optim_K_ms.npy' % args.exp_name)
                         utils.save_model(optim_gamma, 'outputs/%s/optim_gamma_ms.npy' % args.exp_name)                                                                                
                     utils.save_model(model, 'outputs/%s/generative_model_ms.npy' % args.exp_name)
+                    model_path = f'outputs/{args.exp_name}/generative_model_ms.npy'
+                    disk_usage = log_disk_usage(model_path)
+                    wandb.log({"Disk usage after saving best mol. model": disk_usage}, commit=True)
 
                     # Check for scheduler
                     if scheduler is not None:

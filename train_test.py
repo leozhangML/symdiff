@@ -16,6 +16,22 @@ import sym_nn.utils as sym_nn_utils
 
 
 from tqdm import tqdm
+import psutil
+import GPUtil
+
+
+
+def log_ram_usage():
+    process = psutil.Process()
+    ram_usage = process.memory_info().rss  # in bytes
+    return ram_usage
+
+def get_vram_usage():
+    gpus = GPUtil.getGPUs()
+    if gpus:
+        return gpus[0].memoryUsed
+    else:
+        return 0
 
 
 def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dtype, property_norms, optim, 
@@ -120,6 +136,14 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         wandb.log({"Batch NLL": nll.item()}, commit=True)
         if args.break_train_epoch:
             break
+
+        # Logging RAM usage after one step
+        wandb.log({"RAM usage after one step": log_ram_usage()}, commit=True)
+
+        # Log VRAM usage
+        wandb.log({"VRAM usage after one step": get_vram_usage()}, commit=True)
+
+
     wandb.log({"Train Epoch NLL": np.mean(nll_epoch)}, commit=True)  # default is False?
 
 
