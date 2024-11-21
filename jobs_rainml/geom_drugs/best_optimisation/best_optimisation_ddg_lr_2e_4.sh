@@ -9,7 +9,7 @@
 #SBATCH --error=/tmp/slurm-%j.out
 
 # Name of job
-#SBATCH --job-name=best_ddg_geom_drugs_lr_2e_4
+#SBATCH --job-name=geom_drugs_ddg_100M_lr_1e_4_same_qm9
 
 # Using thet cluster swan and node 1 
 #SBATCH --cluster=swan
@@ -21,6 +21,7 @@
 
 # This is useful for selecting the particular nodes that you want
 #NOTSBATCH --nodelist=rainmlgpu01.cpu.stats.ox.ac.uk
+
 
 
 # Make sure RAM is enough
@@ -45,16 +46,16 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 date -u
 
 # Run main script
-# Arguments ignored: --enc_concat_h
-python /data/localhost/not-backed-up/users/$USER/symdiff/main_geom_drugs.py --exp_name best_ddg_geom_drugs_lr_2e_4 --model dit_dit_gaussian_dynamics --dataset geom --datadir /data/localhost/not-backed-up/users/$USER/data/geom/geom_drugs_30.npy \
+cd /vols/bitbucket/$USER/symdiff
+python /vols/bitbucket/$USER/symdiff/main_geom_drugs.py --exp_name geom_drugs_ddg_100M_lr_1e_4_same_qm9 --model dit_dit_gaussian_dynamics --dataset geom --datadir /data/localhost/not-backed-up/users/$USER/data/geom/geom_drugs_30.npy \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
-                   --n_epochs 40 --batch_size 256 --lr 2e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
+                   --n_epochs 55 --batch_size 256 --lr 1e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
-                   --n_stability_samples 500 --test_epochs 5 --wandb_usr kiaashouri --save_model True \
-                   --xh_hidden_size 184 --K 184 \
+                   --n_stability_samples 500 --test_epochs 10 --wandb_usr kiaashouri --save_model True \
+                   --xh_hidden_size 382 --K 382 \
                    --mlp_type swiglu \
-                   --enc_hidden_size 128 --enc_depth 4 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 \
-                   --hidden_size 384 --depth 8 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
+                   --enc_hidden_size 216 --enc_depth 10 --enc_num_heads 8 --enc_mlp_ratio 4.0 --dec_hidden_features 80 \
+                   --hidden_size 768 --depth 12 --num_heads 12 --mlp_ratio 4.0 --mlp_dropout 0.0 \
                    --noise_dims 3 --noise_std 1.0 \
                    --print_parameter_count 
 

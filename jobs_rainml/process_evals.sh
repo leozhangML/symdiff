@@ -11,16 +11,16 @@
 # Name of job
 #SBATCH --job-name=process_evals
 
-# Using thet cluster swan and node 1 
-#SBATCH --cluster=swan
-#SBATCH --partition=standard-rainml-gpu
-#SBATCH --gres=gpu:Ampere_H100_80GB:1
+# Using the cluster swan and node 1 
+#SBATCH --cluster=srf_gpu_01
+#SBATCH --partition=high-bigbayes-test
+#SBATCH --gres=gpu:1
 
 # Change if you know what doing (look at examples, notes)
 #SBATCH --cpus-per-task=1
 
 # This is useful for selecting the particular nodes that you want
-#NOTSBATCH --nodelist=rainmlgpu01.cpu.stats.ox.ac.uk
+#NOTSBATCH --nodelist=zizgpu05.cpu.stats.ox.ac.uk
 
 
 # Make sure RAM is enough
@@ -81,48 +81,56 @@ if [[ -z "${experiment_names[*]}" || -z "${job_ids[*]}" || -z "$directory_path_1
 fi
 
 # Check if the two lists are the same size
-if [[ ${#experiment_names[@]} -ne ${#job_ids[@]} ]]; then
-    echo "The number of experiment names and job IDs must be equal!"
-    exit 1
-fi
+# if [[ ${#experiment_names[@]} -ne ${#job_ids[@]} ]]; then
+#     echo "The number of experiment names and job IDs must be equal!"
+#     exit 1
+# fi
 
 # Iterate over experiment names and job IDs
 for i in "${!experiment_names[@]}"; do
     experiment_name="${experiment_names[$i]}"
-    job_id="${job_ids[$i]}"
-    
-    # Define paths to relevant files
-    experiment_dir="$directory_path_1/$experiment_name"
-    eval_logs="$experiment_dir/eval_log.txt"
-    all_evals="$experiment_dir/all_evals.txt"
-    slurm_script="$directory_path_2/slurm-$job_id.out"
+    # job_id="${job_ids[$i]}"
 
-    # Ensure the experiment directory exists
-    if [[ ! -d "$experiment_dir" ]]; then
-        echo "Experiment directory $experiment_dir does not exist, skipping..."
-        continue
-    fi
+    # Loop through the different seeds (0, 1, 2)
+    for j in {0..2}; do
 
-    # Ensure the eval_logs.txt exists
-    if [[ ! -f "$eval_logs" ]]; then
-        echo "eval_log.txt not found in $experiment_dir, skipping..."
-        continue
-    fi
+        # Get the 3*i + j-th job id
+        job_id="${job_ids[3*i + j]}"
+        
+        # Define paths to relevant files
+        experiment_dir="$directory_path_1/$experiment_name"
+        eval_logs="$experiment_dir/eval_log_seed_$j.txt"
+        all_evals="$experiment_dir/all_evals_seed_$j.txt"
+        slurm_script="$directory_path_2/slurm-$job_id.out"
+        
 
-    # Ensure the slurm script file exists
-    if [[ ! -f "$slurm_script" ]]; then
-        echo "Slurm script $slurm_script not found, skipping..."
-        continue
-    fi
+        # Ensure the experiment directory exists
+        if [[ ! -d "$experiment_dir" ]]; then
+            echo "Experiment directory $experiment_dir does not exist, skipping..."
+            continue
+        fi
 
-    # Create (or overwrite) the all_evals.txt file by copying the content of eval_logs.txt
-    cp "$eval_logs" "$all_evals"
+        # Ensure the eval_logs.txt exists
+        if [[ ! -f "$eval_logs" ]]; then
+            echo "eval_log.txt not found in $experiment_dir, skipping..."
+            continue
+        fi
 
-    # Search for the line "Validity over 10000 molecules" and extract that line and the next 5 lines
-    slurm_content=$(awk '/Validity over 10000 molecules/{flag=1;count=6} flag{print; if(--count==0)exit}' "$slurm_script")
+        # Ensure the slurm script file exists
+        if [[ ! -f "$slurm_script" ]]; then
+            echo "Slurm script $slurm_script not found, skipping..."
+            continue
+        fi
 
-    # Append the slurm content to the all_evals.txt file
-    echo "$slurm_content" >> "$all_evals"
+        # Create (or overwrite) the all_evals.txt file by copying the content of eval_logs.txt
+        cp "$eval_logs" "$all_evals"
+
+        # Search for the line "Validity over 10000 molecules" and extract that line and the next 5 lines
+        slurm_content=$(awk '/Validity over 10000 molecules/{flag=1;count=6} flag{print; if(--count==0)exit}' "$slurm_script")
+
+        # Append the slurm content to the all_evals.txt file
+        echo "$slurm_content" >> "$all_evals"
+    done
 done
 
  
