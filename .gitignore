@@ -3,3 +3,9 @@ outputs/
 *outputs/
 *.sh
 *.sh/
+*.gif
+*.gif/
+*.txt
+*.txt/
+*slurm
+*slurm/
