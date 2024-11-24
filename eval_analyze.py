@@ -108,6 +108,7 @@ def test(args, flow_dp, nodes_dist, device, dtype, loader, partition='Test', num
                     print(f"\r {partition} NLL \t, iter: {i}/{len(loader)}, "
                           f"NLL: {nll_epoch/n_samples:.2f}")
 
+    print("The type of the output of test() is:", type(nll_epoch/n_samples))
     return nll_epoch/n_samples
 
 
@@ -130,15 +131,10 @@ def main():
     # options for what eval metrics to compute
     parser.add_argument("--compute_chemical_metrics", action="store_true")
     parser.add_argument("--compute_nll", action="store_true")
-    
     parser.add_argument("--model_equivariance_metric", action="store_true")
-
     parser.add_argument("--return_iwae_nll", action="store_true")
     parser.add_argument('--n_importance_samples', type=int, default=10)
-
     parser.add_argument("--visualise_gamma", action="store_true")
-
-    # plot path
     parser.add_argument('--plots_path', type=str, default="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots")
 
     eval_args, unparsed_args = parser.parse_known_args()
@@ -193,7 +189,6 @@ def main():
 
     # Retrieve QM9 dataloaders
     dataloaders, charge_scale = dataset.retrieve_dataloaders(args)
-
     dataset_info = get_dataset_info(args.dataset, args.remove_h)
 
     # Load model
@@ -202,25 +197,29 @@ def main():
         property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)
         prop_dist.set_normalizer(property_norms)
     generative_model.to(device)
+    print("Loaded model!")
 
     fn = 'generative_model_ema.npy' if args.ema_decay > 0 else 'generative_model.npy'
     flow_state_dict = torch.load(join(eval_args.model_path, fn), map_location=device)
     generative_model.load_state_dict(flow_state_dict)
+    print("Loaded model state dict!")
 
     # Analyze stability, validity, uniqueness and novelty with nodes_dist
     if eval_args.compute_chemical_metrics:
-
+        print("Computing chemical metrics")
         stability_dict, rdkit_metrics = analyze_and_save(
             args, eval_args, device, generative_model, nodes_dist,
             prop_dist, dataset_info, n_samples=eval_args.n_samples,
             batch_size=eval_args.batch_size_gen, save_to_xyz=eval_args.save_to_xyz)
+        
+        print("Stability dict after analysing:")
         print(stability_dict)
 
         if rdkit_metrics is not None:
             rdkit_metrics = rdkit_metrics[0]
             print("Validity %.4f, Uniqueness: %.4f, Novelty: %.4f" % (rdkit_metrics[0], rdkit_metrics[1], rdkit_metrics[2]))
         else:
-            print("Install rdkit roolkit to obtain Validity, Uniqueness, Novelty")
+            print("Install rdkit roolkit to obtain validity, uniqueness and novelty metrics")
 
     # In GEOM-Drugs the validation partition is named 'val', not 'valid'.
     if args.dataset == 'geom':
@@ -239,30 +238,47 @@ def main():
 
     # Evaluate negative log-likelihood for the validation and test partitions
     if eval_args.compute_nll:
+        print("Evaluating NLL")
+        try:
+            val_nll, val_model_metric, val_backbone_metric, val_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
+                        dataloaders[val_name],
+                        partition='Val')
+        except:
+            val_nll = test(args, generative_model, nodes_dist, device, dtype, 
+                            dataloaders[val_name], partition='Val')
+        print(f'Final val. NLL {val_nll}')
 
-        val_nll, val_model_metric, val_backbone_metric, val_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
-                       dataloaders[val_name],
-                       partition='Val')
-        print(f'Final val nll {val_nll}')
+        try:
+            test_nll, test_model_metric, test_backbone_metric, test_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
+                            dataloaders['test'],
+                            partition='Test', num_passes=num_passes)
+        except:
+            test_nll= test(args, generative_model, nodes_dist, device, dtype,
+                            dataloaders['test'],
+                            partition='Test', num_passes=num_passes)            
+            
+        # Print the, being careful of model metrics
+        print(f'Final test NLL {test_nll}')
+        print(f'Overview: val. NLL {val_nll} test NLL {test_nll}', stability_dict)
+        # print(f"(Val) model metric: {val_model_metric}, backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}")
+        # print(f"(Test) model metric: {test_model_metric}, backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}")
 
-        test_nll, test_model_metric, test_backbone_metric, test_iwae_nll = test(args, generative_model, nodes_dist, device, dtype,
-                        dataloaders['test'],
-                        partition='Test', num_passes=num_passes)
-        print(f'Final test nll {test_nll}')
-
-        print(f'Overview: val nll {val_nll} test nll {test_nll}', stability_dict)
-        print(f"(Val) model metric: {val_model_metric}, backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}")
-        print(f"(Test) model metric: {test_model_metric}, backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}")
+        # Saving results
         with open(join(eval_args.model_path, 'eval_log.txt'), 'w') as f:
-            print(f'Overview: val nll {val_nll}, test nll {test_nll}, (Val) model metric: {val_model_metric}, \
-                  backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}, (Test) model metric: {test_model_metric}, \
-                    backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}',
+            print("Saving in:", join(eval_args.model_path, 'eval_log.txt'))
+            # print(f'Overview: val nll {val_nll}, test nll {test_nll}, (Val) model metric: {val_model_metric}, \
+            #       backbone metric: {val_backbone_metric}, val_iwae_nll: {val_iwae_nll}, (Test) model metric: {test_model_metric}, \
+            #       backbone metric: {test_backbone_metric}, test_iwae_nll: {test_iwae_nll}',
+            #     stability_dict,
+            #     file=f)
+            print(f'Overview: val nll {val_nll}, test nll {test_nll}',
                 stability_dict,
                 file=f)
+            
 
     # visualise gamma
     if eval_args.visualise_gamma:
-
+        print("Visualising gamma samples:")
         z_t, t, node_mask = get_samples(args, generative_model, dataloaders['train'])
         sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_samples=10000)
 
