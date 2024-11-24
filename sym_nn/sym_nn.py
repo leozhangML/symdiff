@@ -1653,10 +1653,10 @@ class ScalarsDiT_DitGaussian_dynamics(nn.Module):
 
         xh_embedder_params = sum(p.numel() for p in self.xh_embedder.parameters() if p.requires_grad)
         pos_embedder_params = sum(p.numel() for p in self.pos_embedder.parameters() if p.requires_grad)
-        pos_embedder_test_params = sum(p.numel() for p in self.pos_embedder_test.parameters() if p.requires_grad)
+        # pos_embedder_test_params = sum(p.numel() for p in self.pos_embedder_test.parameters() if p.requires_grad)
         gaussian_embedder_params = sum(p.numel() for p in self.gaussian_embedder.parameters() if p.requires_grad)
-        gaussian_embedder_test_params = sum(p.numel() for p in self.gaussian_embedder_test.parameters() if p.requires_grad)
-        embedder_params = xh_embedder_params + pos_embedder_params + pos_embedder_test_params + gaussian_embedder_params + gaussian_embedder_test_params
+        # gaussian_embedder_test_params = sum(p.numel() for p in self.gaussian_embedder_test.parameters() if p.requires_grad)
+        embedder_params = xh_embedder_params + pos_embedder_params + gaussian_embedder_params
 
         gamma_enc_params = sum(p.numel() for p in self.gamma_enc.parameters() if p.requires_grad)
         gamma_dec_params = sum(p.numel() for p in self.gamma_dec.parameters() if p.requires_grad)
