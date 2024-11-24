@@ -136,6 +136,7 @@ def main():
     parser.add_argument('--n_importance_samples', type=int, default=10)
     parser.add_argument("--visualise_gamma", action="store_true")
     parser.add_argument('--plots_path', type=str, default="/data/ziz/not-backed-up/lezhang/projects/symdiff/plots")
+    parser.add_argument('--use_gamma_for_sampling', type=bool, default=True)
 
     eval_args, unparsed_args = parser.parse_known_args()
 
@@ -149,6 +150,7 @@ def main():
     if eval_args.datadir is not None:
         print("Using different datadir!")
         args.datadir = eval_args.datadir
+    args.use_gamma_for_sampling = eval_args.use_gamma_for_sampling
 
 
     # NOTE: CAREFUL with this -->
