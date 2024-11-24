@@ -137,13 +137,23 @@ def main():
     parser.add_argument('--fixed_gamma_time_value', type=int, default=0)
 
     # Arguments for scalars DiT Gaussian
-
     parser.add_argument("--t_hidden_size", type=int, default=32, help="config for Deepsets")
     parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
     parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
+    parser.add_argument("--use_separate_gauss_embs", action="store_true", help="Whether to use separate Gaussian embeddings for k and gamma")
+    # parser.add_argument("--dropout_gamma_enc", type=float, default=0.0, help="Dropout for gamma encoder")
+    # parser.add_argument("--dropout_gamma_dec", type=float, default=0.0, help="Dropout for gamma decoder")
+    # parser.add_argument("--dropout_k", type=float, default=0.0, help="Dropout for k")
+    # parser.add_argument("--gamma_K", type=float, default=0, help="K for gamma positional embeddings")
+    # parser.add_argument("--k_K", type=float, default=0, help="K for k positional embeddings")
+    # parser.add_argument("--pos_emb_gamma_projection_dim", type=float, default=0, help="Dimension of the projection for gamma positional embeddings")
+    parser.add_argument("--use_separate_dropout", action="store_true", help="Whether to use separate dropouts for gamma enc, gamma dec, and k")
 
 
+    # Whether to use gamma for sampling or not
+    parser.add_argument('--use_gamma_for_sampling', type=bool, default=True)
     eval_args, unparsed_args = parser.parse_known_args()
+
 
     assert eval_args.model_path is not None
 
@@ -173,6 +183,17 @@ def main():
     args.t_hidden_size = eval_args.t_hidden_size
     args.pos_emb_gamma_size = eval_args.pos_emb_gamma_size
     args.gamma_1_hidden_size = eval_args.gamma_1_hidden_size    
+    args.use_gamma_for_sampling = eval_args.use_gamma_for_sampling
+
+    args.use_separate_gauss_embs = eval_args.use_separate_gauss_embs
+    # args.dropout_gamma_enc = eval_args.dropout_gamma_enc
+    # args.dropout_gamma_dec = eval_args.dropout_gamma_dec
+    # args.dropout_k = eval_args.dropout_k
+    # args.gamma_K = eval_args.gamma_K
+    # args.k_K = eval_args.k_K
+    # args.pos_emb_gamma_projection_dim = eval_args.pos_emb_gamma_projection_dim
+    args.use_separate_dropout = eval_args.use_separate_dropout
+
 
     print("ARGE NOISE X:", args.use_noise_x)
     device = torch.device("cuda" if args.cuda else "cpu")

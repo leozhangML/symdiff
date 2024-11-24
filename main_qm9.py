@@ -344,6 +344,9 @@ parser.add_argument("--t_hidden_size", type=int, default=32, help="config for De
 parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")
 parser.add_argument("--gamma_1_hidden_size", type=int, default=32, help="config for Deepsets")
 
+# Add argument for whether we should be sampling gamma at test time or not 
+parser.add_argument('--use_gamma_for_sampling', type=bool, default=True)
+
 
 ########################################################################################################################
 

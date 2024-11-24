@@ -458,7 +458,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             use_separate_dropout = args.use_separate_dropout,
             dropout_gamma_enc = args.dropout_gamma_enc,
             dropout_gamma_dec = args.dropout_gamma_dec,
-            dropout_k = args.dropout_k)
+            dropout_k = args.dropout_k,
+            use_gamma_for_sampling=args.use_gamma_for_sampling)
 
     elif args.model == "deepsets_dit_gaussian_dynamics":
 

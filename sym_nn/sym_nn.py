@@ -1976,7 +1976,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         use_separate_K = False,
         gamma_K = 0,
         k_K = 0,
-        pos_emb_gamma_projection_dim = 0
+        pos_emb_gamma_projection_dim = 0,
+        use_gamma_for_sampling = True
     ) -> None:
         super().__init__()
 
@@ -1988,6 +1989,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.use_noise_x = args.use_noise_x
         self.remove_conditioning_time_gamma = args.remove_conditioning_time_gamma
         self.fixed_gamma_time_value = args.fixed_gamma_time_value
+        self.use_gamma_for_sampling = use_gamma_for_sampling
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
@@ -2153,9 +2155,9 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         # Sample g from the haar - this is for our symmetrisation
         g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
-
-
         N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+
+
         if not self.use_separate_gauss_embs:
             pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
             pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
@@ -2165,6 +2167,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
             pos_emb_k = self.gaussian_embedder_k(x, node_mask)  # [bs, n_nodes, n_nodes, K]
             pos_emb_k = torch.sum(self.pos_embedder_k(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
 
         g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
@@ -2189,7 +2192,6 @@ class DiT_DitGaussian_dynamics(nn.Module):
         else:
             t_gamma = t
 
-
         gamma = node_mask * self.gamma_enc(
             g_inv_x, t_gamma.squeeze(-1), node_mask.squeeze(-1),
             use_final_layer=False
@@ -2209,7 +2211,11 @@ class DiT_DitGaussian_dynamics(nn.Module):
         gamma = torch.bmm(gamma, g.transpose(2, 1)) #  TODO CHANGE THIS TO OUTPUT THUS
 
 
-        gamma_inv_x = torch.bmm(x, gamma.clone())
+        # Whether to use gammas or not
+        if self.use_gamma_for_sampling:
+            gamma_inv_x = torch.bmm(x, gamma.clone())
+        else:
+            gamma_inv_x = x
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
 
         if not self.use_separate_gauss_embs:
@@ -2224,8 +2230,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
-        x = torch.bmm(x, gamma.transpose(2, 1))
-        xh = torch.cat([x, h], dim=-1)        
+        # Whether to use gammas at sampling or not
+        if self.use_gamma_for_sampling:
+            x = torch.bmm(x, gamma.transpose(2, 1))
+        xh = torch.cat([x, h], dim=-1)
 
         assert_correctly_masked(xh, node_mask)
 
