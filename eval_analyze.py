@@ -150,7 +150,10 @@ def main():
     if eval_args.datadir is not None:
         print("Using different datadir!")
         args.datadir = eval_args.datadir
+
+    # TODO: REMOVE
     args.use_gamma_for_sampling = eval_args.use_gamma_for_sampling
+    print("Value for gamma smapling", args.use_gamma_for_sampling)
 
 
     # NOTE: CAREFUL with this -->
@@ -194,6 +197,7 @@ def main():
     dataset_info = get_dataset_info(args.dataset, args.remove_h)
 
     # Load model
+    print("Value for gamma smapling", args.use_gamma_for_sampling)
     generative_model, nodes_dist, prop_dist = get_model(args, device, dataset_info, dataloaders['train'])
     if prop_dist is not None:
         property_norms = compute_mean_mad(dataloaders, args.conditioning, args.dataset)
