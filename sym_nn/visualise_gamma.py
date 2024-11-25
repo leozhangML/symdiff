@@ -104,6 +104,22 @@ def create_interactive_plot(embeddings, title=""):
     plt.tight_layout()
     return fig
 
+def create_single_view_plot(embeddings, title=""):
+    fig = plt.figure(figsize=(20, 5))
+    fig.suptitle(title)
+
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
+    ax.scatter(
+            embeddings[:, 0],
+            embeddings[:, 1],
+            embeddings[:, 2],
+            alpha=0.2,
+            s=10
+        )
+
+    plt.tight_layout()
+    return fig
+
 def create_hist2d_plot(coords, title=""):
     """
     Creates 2D histograms of different projections.
@@ -213,23 +229,23 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
     print(f"ignore_x={ignore_x}")
 
     if use_haar:
-        #g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)  # [bs, 3, 3]
-        g = generative_model.dynamics.base_gamma(t, x, node_mask)  # [bs, 3, 3]
+        g = orthogonal_haar(dim=generative_model.dynamics.n_dims, target_tensor=x)  # [bs, 3, 3]
+        #g = generative_model.dynamics.base_gamma(t, x, node_mask)  # [bs, 3, 3]
     else:
         g = torch.eye(3, device=x.device)[None, ...].repeat_interleave(bs, dim=0)
 
     N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
-    #pos_emb_test = generative_model.dynamics.gaussian_embedder_test(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
-    #pos_emb_test = torch.sum(generative_model.dynamics.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, pos_embedder_test]
+    pos_emb_test = generative_model.dynamics.gaussian_embedder_test(x.clone(), node_mask)  # [bs, n_nodes, n_nodes, K]
+    pos_emb_test = torch.sum(generative_model.dynamics.pos_embedder_test(pos_emb_test), dim=-2) / N  # [bs, n_nodes, pos_embedder_test]
 
     g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
 
     #g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
-    g_inv_x = node_mask * generative_model.dynamics.gamma_projection(g_inv_x)
+    #g_inv_x = node_mask * generative_model.dynamics.gamma_projection(g_inv_x)
 
     if generative_model.dynamics.noise_dims > 0:
         print("USING NOISE DIMS > 0!")
-        
+
         g_inv_x = torch.cat([
             g_inv_x, 
             node_mask * generative_model.dynamics.noise_std * torch.randn(
@@ -245,14 +261,14 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
                 bs, n_nodes, generative_model.dynamics.noise_dims, device=generative_model.dynamics.device
                 )
             ], dim=-1)
-        """
+       """ 
 
     if ignore_x:
         g_inv_x = torch.zeros_like(g_inv_x, device=x.device)
 
     #g_inv_x = node_mask * generative_model.dynamics.gamma_input_layer(g_inv_x)
 
-    #g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)
+    g_inv_x = torch.cat([g_inv_x, pos_emb_test.clone()], dim=-1)
 
     # [bs, n_nodes, hidden_size]
     gamma = node_mask * generative_model.dynamics.gamma_enc(
@@ -289,7 +305,7 @@ def extract_gamma_enc(args, generative_model, t, x, node_mask, use_haar=True, ig
 
     # plot metrics for gamma encoder
     fig, axes = plt.subplots(3, 1, figsize=(20, 15))
-    fig.suptitle(f"gamma encoder: , use_haar={use_haar}, ignore_x={ignore_x}")
+    fig.suptitle(f"gamma encoder (FIX NOISE): , use_haar={use_haar}, ignore_x={ignore_x}")
 
     # gamma norms
     gamma_norms = torch.norm(gamma, dim=-1)  # [bs]
@@ -376,7 +392,10 @@ def sample_gamma(args, eval_args, generative_model, z_t, t, node_mask, num_sampl
         pass
 
     # plot 3d scatter plot of gamma
-    fig = create_interactive_plot(coords, title=f"t={t.item()}")
+    #fig = create_interactive_plot(coords, title=f"t={t.item()}")
+    #save_fig(args, fig)
+
+    fig = create_single_view_plot(coords, title="SymDiff")
     save_fig(args, fig)
 
     # plot projection heatmaps of gamma

@@ -19,7 +19,7 @@
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=01-00:00:00  
+#SBATCH --time=00-01:00:00  
 #SBATCH --mem=32G  
 
 # Don't change unless you know why (look at examples and notes for more information)
@@ -49,7 +49,8 @@ date -u
 
 #python eval_analyze.py --model_path outputs/edm_9_4_m --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
 #python eval_analyze.py --model_path outputs/DiTGaussian_aug_ablate --n_samples 10000 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang
-python eval_analyze.py --model_path outputs/ScalarsDiT_DitGaussian_random_init --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang --visualise_gamma
+#python eval_analyze.py --model_path outputs/ScalarsDiT_DitGaussian_5 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang --visualise_gamma
+python eval_analyze.py --model_path outputs/DiT_DiTGaussian_tune --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang --visualise_gamma
 #python t.py
 
 date -u
