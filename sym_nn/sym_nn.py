@@ -162,12 +162,14 @@ class DiT_DitGaussian_dynamics(nn.Module):
         mlp_type: str = "mlp",
 
         n_dims: int = 3,
-        device: str = "cpu"
+        device: str = "cpu",
+        use_gamma_for_sampling: bool = True
     ) -> None:
         super().__init__()
 
         self.args = args
         self.molecule = args.molecule
+        self.use_gamma_for_sampling = use_gamma_for_sampling
 
         self.n_dims = n_dims
         self.in_node_nf = in_node_nf if self.molecule else 0
@@ -323,7 +325,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         gamma = self.gamma(t, x, node_mask)
 
-        gamma_inv_x = torch.bmm(x, gamma.clone())
+        if self.use_gamma_for_sampling:
+            gamma_inv_x = torch.bmm(x, gamma.clone())
+        else:
+            gamma_inv_x = x
         xh = self.k(t, gamma_inv_x, h, node_mask)
 
         x = xh[:, :, :self.n_dims]
@@ -332,7 +337,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
-        x = torch.bmm(x, gamma.transpose(2, 1))
+        if self.use_gamma_for_sampling:
+            x = torch.bmm(x, gamma.transpose(2, 1))
         xh = torch.cat([x, h], dim=-1)
 
         assert_correctly_masked(xh, node_mask)
@@ -391,12 +397,14 @@ class DiTModPE_DitGaussian_dynamics(nn.Module):
         mlp_type: str = "mlp",
 
         n_dims: int = 3,
-        device: str = "cpu"
+        device: str = "cpu",
+        use_gamma_for_sampling: bool = True
     ) -> None:
         super().__init__()
 
         self.args = args
         self.molecule = args.molecule
+        self.use_gamma_for_sampling = use_gamma_for_sampling
 
         self.n_dims = n_dims
         self.in_node_nf = in_node_nf if self.molecule else 0
@@ -553,7 +561,10 @@ class DiTModPE_DitGaussian_dynamics(nn.Module):
 
         gamma = self.gamma(t, x, node_mask)
 
-        gamma_inv_x = torch.bmm(x, gamma.clone())
+        if self.use_gamma_for_sampling:
+            gamma_inv_x = torch.bmm(x, gamma.clone())
+        else:
+            gamma_inv_x = x
         xh = self.k(t, gamma_inv_x, h, node_mask)
 
         x = xh[:, :, :self.n_dims]
@@ -562,7 +573,8 @@ class DiTModPE_DitGaussian_dynamics(nn.Module):
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
-        x = torch.bmm(x, gamma.transpose(2, 1))
+        if self.use_gamma_for_sampling:
+            x = torch.bmm(x, gamma.transpose(2, 1))
         xh = torch.cat([x, h], dim=-1)
 
         assert_correctly_masked(xh, node_mask)
@@ -1654,10 +1666,10 @@ class ScalarsDiT_DitGaussian_dynamics(nn.Module):
 
         xh_embedder_params = sum(p.numel() for p in self.xh_embedder.parameters() if p.requires_grad)
         pos_embedder_params = sum(p.numel() for p in self.pos_embedder.parameters() if p.requires_grad)
-        pos_embedder_test_params = sum(p.numel() for p in self.pos_embedder_test.parameters() if p.requires_grad)
+        # pos_embedder_test_params = sum(p.numel() for p in self.pos_embedder_test.parameters() if p.requires_grad)
         gaussian_embedder_params = sum(p.numel() for p in self.gaussian_embedder.parameters() if p.requires_grad)
-        gaussian_embedder_test_params = sum(p.numel() for p in self.gaussian_embedder_test.parameters() if p.requires_grad)
-        embedder_params = xh_embedder_params + pos_embedder_params + pos_embedder_test_params + gaussian_embedder_params + gaussian_embedder_test_params
+        # gaussian_embedder_test_params = sum(p.numel() for p in self.gaussian_embedder_test.parameters() if p.requires_grad)
+        embedder_params = xh_embedder_params + pos_embedder_params + gaussian_embedder_params
 
         gamma_enc_params = sum(p.numel() for p in self.gamma_enc.parameters() if p.requires_grad)
         gamma_dec_params = sum(p.numel() for p in self.gamma_dec.parameters() if p.requires_grad)

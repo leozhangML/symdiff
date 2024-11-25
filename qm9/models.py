@@ -114,7 +114,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             mlp_type=args.mlp_type,
 
             n_dims=args.n_dims,
-            device=device
+            device=device,
+            use_gamma_for_sampling=args.use_gamma_for_sampling
         )
 
     elif args.model == "ditmodepe_dit_gaussian_dynamics":
