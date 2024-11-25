@@ -159,6 +159,7 @@ parser.add_argument("--xh_hidden_size", type=int, default=128, help="config for 
 parser.add_argument("--K", type=int, default=128, help="config for DiTGaussian")
 parser.add_argument("--pos_embedder_test", type=int, default=4, help="config for DiTGaussian")
 
+
 parser.add_argument("--hidden_size", type=int, default=256, help="config for DiT")
 parser.add_argument("--depth", type=int, default=6, help="config for DiT")
 parser.add_argument("--num_heads", type=int, default=4, help="config for DiT")
@@ -198,6 +199,7 @@ parser.add_argument("--base_enc_hidden_size", type=int, default=64, help="config
 parser.add_argument("--base_enc_depth", type=int, default=4, help="config for ScalarsDiT_DiTGaussian")
 parser.add_argument("--base_enc_num_heads", type=int, default=4, help="config for ScalarsDiT_DiTGaussian")
 parser.add_argument("--base_enc_mlp_ratio", type=float, default=4.0, help="config for ScalarsDiT_DiTGaussian")
+parser.add_argument("--xh_gamma_hidden_size", type=int, default=128, help="config for DiTGaussian")
 
 
 args = parser.parse_args()
@@ -286,7 +288,10 @@ optim = get_optim(args, model)
 scheduler = get_scheduler(args, optim)
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 if args.print_parameter_count:
-    model.dynamics.print_parameter_count()
+    try:
+        model.dynamics.print_parameter_count()
+    except:
+        print("Cannot print the number of model parameters")
 
 gradnorm_queue = utils.Queue()  # stores grad norms for clipping within some std of past grads
 gradnorm_queue.add(3000)  # Add large value that will be flushed.
