@@ -7,7 +7,7 @@ from egnn.models import EGNN_dynamics_QM9
 
 from equivariant_diffusion.en_diffusion import EnVariationalDiffusion
 from sym_nn.sym_nn import DiTGaussian_dynamics, DiT_DitGaussian_dynamics, DiTOnlyGaussian_dynamics, DeepSets_DitGaussian_dynamics, \
-                          Scalars_DitGaussian_dynamics, DiTFinal_DitGaussian_dynamics, DiTModPE_DitGaussian_dynamics, ScalarsDiT_DitGaussian_dynamics, ScalarsDiT_PE_DitGaussian_dynamics
+                          Scalars_DitGaussian_dynamics, DiTFinal_DitGaussian_dynamics, DiTModPE_DitGaussian_dynamics, ScalarsDiT_DitGaussian_dynamics, ScalarsDiT_PE_DitGaussian_dynamics, ScalarsDiT_PE_no_recursion_DitGaussian_dynamics
 
 
 def get_model(args, device, dataset_info, dataloader_train):
@@ -60,6 +60,36 @@ def get_model(args, device, dataset_info, dataloader_train):
             n_dims=3,
             device=device
         )
+
+    elif args.model == "scalars_dit_pe_no_recursion_dit_gaussian_dynamics":        
+            net_dynamics = ScalarsDiT_PE_no_recursion_DitGaussian_dynamics(
+                args,
+                in_node_nf=in_node_nf,
+                context_node_nf=args.context_node_nf,
+    
+                xh_hidden_size=args.xh_hidden_size,
+                K=args.K,
+    
+                base_enc_hidden_size=args.base_enc_hidden_size,
+                base_enc_depth=args.base_enc_depth,
+                base_enc_num_heads=args.base_enc_num_heads,
+                base_enc_mlp_ratio=args.base_enc_mlp_ratio,
+    
+                gamma_mlp_dropout=args.gamma_mlp_dropout,
+    
+                hidden_size=args.hidden_size,
+                depth=args.depth,
+                num_heads=args.num_heads,
+                mlp_ratio=args.mlp_ratio,
+                mlp_dropout=args.mlp_dropout,
+    
+                noise_dims=args.noise_dims,
+                noise_std=args.noise_std,
+    
+                mlp_type=args.mlp_type,
+    
+                n_dims=args.n_dims,
+                device=device)
 
     elif args.model == "dit_only_gaussian_dynamics":
 
