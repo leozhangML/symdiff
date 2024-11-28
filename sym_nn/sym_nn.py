@@ -2143,7 +2143,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
         # [bs, 3, 3]
         gamma = qr(
-            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)   # TODO: double transpose to fix the QR here, transpose in the input and output
             )[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1))
 
