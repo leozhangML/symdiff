@@ -1969,13 +1969,15 @@ class DiT_DitGaussian_dynamics(nn.Module):
         use_separate_K = False,
         gamma_K = 0,
         k_K = 0,
-        pos_emb_gamma_projection_dim = 0
+        pos_emb_gamma_projection_dim = 0,
+        use_gamma_for_sampling = True
     ) -> None:
         super().__init__()
 
         self.args = args
         self.n_dims = n_dims
         self.use_separate_gauss_embs = use_separate_gauss_embs
+        self.use_gamma_for_sampling = use_gamma_for_sampling
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
@@ -2078,7 +2080,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None, return_gamma=False):
         # t: [bs, 1]
         # xh: [bs, n_nodes, dims]
         # node_mask: [bs, n_nodes, 1]
@@ -2145,7 +2147,14 @@ class DiT_DitGaussian_dynamics(nn.Module):
             )[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1))
 
-        gamma_inv_x = torch.bmm(x, gamma.clone())
+        # Using gamma sampling 
+        if self.use_gamma_for_sampling:
+            gamma_inv_x = torch.bmm(x, gamma.clone())
+            print("Using gamma")
+        else:
+            gamma_inv_x = x
+            print("Not using gamma")
+
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
 
         if not self.use_separate_gauss_embs:
@@ -2160,11 +2169,17 @@ class DiT_DitGaussian_dynamics(nn.Module):
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
-        x = torch.bmm(x, gamma.transpose(2, 1))
+        # Whether to use gammas at sampling or not
+        if self.use_gamma_for_sampling:
+            print("Using gamma.")
+            x = torch.bmm(x, gamma.transpose(2, 1))
+            
         xh = torch.cat([x, h], dim=-1)
-
         assert_correctly_masked(xh, node_mask)
-
+    
+        # Output
+        if return_gamma:
+            return xh, gamma
         return xh
 
     def print_parameter_count(self):

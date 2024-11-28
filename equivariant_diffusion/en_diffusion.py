@@ -352,7 +352,12 @@ class EnVariationalDiffusion(torch.nn.Module):
                 f'large with sigma_0 {sigma_0:.5f} and '
                 f'1 / norm_value = {1. / max_norm_value}')
 
-    def phi(self, x, t, node_mask, edge_mask, context):
+    def phi(self, x, t, node_mask, edge_mask, context, return_gamma_only=False):
+        if return_gamma_only:
+            net_out, gamma = self.dynamics._forward(t, x, node_mask, edge_mask, context, return_gamma=True)
+            print("Shape of gamma that is being outputted by self.phi in EVD", gamma.shape)
+            return gamma
+        
         if self.com_free:
             net_out = self.dynamics._forward(t, x, node_mask, edge_mask, context)
         else:
@@ -666,9 +671,8 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         return log_p_xh_given_z
 
-    def compute_loss(self, x, h, node_mask, edge_mask, context, t0_always):
+    def compute_loss(self, x, h, node_mask, edge_mask, context, t0_always, t_fixed=None, return_gamma_only=False):
         """Computes an estimator for the variational lower bound, or the simple loss (MSE)."""
-
         # This part is about whether to include loss term 0 always.
         if t0_always:
             # loss_term_0 will be computed separately.
@@ -679,8 +683,12 @@ class EnVariationalDiffusion(torch.nn.Module):
             lowest_t = 0
 
         # Sample a timestep t.
-        t_int = torch.randint(
-            lowest_t, self.T + 1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
+        if t_fixed is not None:
+            t_int = t_fixed
+        else:
+            t_int = torch.randint(lowest_t, self.T + 1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
+            print("Shape of t_int in compute_loss is: ", t_int.shape)
+
         s_int = t_int - 1
         t_is_zero = (t_int == 0).float()  # Important to compute log p(x | z0)  [bs, 1] of 0, 1
 
@@ -703,13 +711,17 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Concatenate x, h[integer] and h[categorical].
         xh = torch.cat([x, h['categorical'], h['integer']], dim=2)  # [bs, n_nodes, dims]
+
         # Sample z_t given x, h for timestep t, from q(z_t | x, h)
         z_t = alpha_t * xh + sigma_t * eps
-
         if self.com_free:
             diffusion_utils.assert_mean_zero_with_mask(z_t[:, :, :self.n_dims], node_mask)
 
-        # Neural net prediction.
+
+        # Using our model to predict the denoised version of z_t 
+        if return_gamma_only:
+            gammas = self.phi(z_t, t, node_mask, edge_mask, context, return_gamma_only=True)    
+            return gammas        
         net_out = self.phi(z_t, t, node_mask, edge_mask, context)
 
         # Compute the error.
@@ -793,7 +805,26 @@ class EnVariationalDiffusion(torch.nn.Module):
         return loss, {'t': t_int.squeeze(), 'loss_t': loss.squeeze(),
                       'error': error.squeeze()}
 
-    def forward(self, x, h, node_mask=None, edge_mask=None, context=None):
+    def sample_gamma(self, x, h, node_mask=None, edge_mask=None, context=None, return_time=False, t_fixed=None):
+        """
+        Computes the loss (type l2 or NLL) if training. And if eval then always computes NLL."""
+        # Normalize data - take into account volume change in x
+        x, h, delta_log_px = self.normalize(x, h, node_mask)
+
+        # Reset delta_log_px if not vlb objective.
+        if self.training and self.loss_type == 'l2':
+            delta_log_px = torch.zeros_like(delta_log_px)
+
+        if self.training:
+            # Only 1 forward pass when t0_always is False.
+            gammas = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=False, t_fixed=t_fixed, return_gamma_only=True)
+        else:
+            # Less variance in the estimator, costs two forward passes. ?
+            gammas = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=True, t_fixed=t_fixed, return_gamma_only=True)
+
+        return gammas
+
+    def forward(self, x, h, node_mask=None, edge_mask=None, context=None, return_time=False, t_fixed=None):
         """
         Computes the loss (type l2 or NLL) if training. And if eval then always computes NLL.
         """
@@ -806,17 +837,18 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         if self.training:
             # Only 1 forward pass when t0_always is False.
-            loss, loss_dict = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=False)
+            loss, loss_dict = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=False, t_fixed=t_fixed)
         else:
             # Less variance in the estimator, costs two forward passes. ?
-            loss, loss_dict = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=True)
-
+            loss, loss_dict = self.compute_loss(x, h, node_mask, edge_mask, context, t0_always=True, t_fixed=t_fixed)
         neg_log_pxh = loss
 
         # Correct for normalization on x.
         assert neg_log_pxh.size() == delta_log_px.size()  # np scalar
         neg_log_pxh = neg_log_pxh - delta_log_px  # add the (neg) log contribution of normalisation 
 
+        if return_time:
+            return neg_log_pxh, loss_dict
         return neg_log_pxh
 
     def sample_p_zs_given_zt(self, s, t, zt, node_mask, edge_mask, context, fix_noise=False):
@@ -901,7 +933,6 @@ class EnVariationalDiffusion(torch.nn.Module):
 
         # Finally sample p(x, h | z_0).
         x, h = self.sample_p_xh_given_z0(z, node_mask, edge_mask, context, fix_noise=fix_noise)  # we remove the mean even for com_free=False
-
         diffusion_utils.assert_mean_zero_with_mask(x, node_mask)
 
         max_cog = torch.sum(x, dim=1, keepdim=True).abs().max().item()
