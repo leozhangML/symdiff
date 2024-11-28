@@ -455,7 +455,8 @@ def get_model(args, device, dataset_info, dataloader_train):
             dropout_gamma_enc = args.dropout_gamma_enc,
             dropout_gamma_dec = args.dropout_gamma_dec,
             dropout_k = args.dropout_k,
-            use_gamma_for_sampling=args.use_gamma_for_sampling)
+            use_gamma_for_sampling=args.use_gamma_for_sampling,
+            fix_qr=args.fix_qr)
     
     elif args.model == "perceiver_gaussian_dynamics":
 

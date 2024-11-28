@@ -1970,7 +1970,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         gamma_K = 0,
         k_K = 0,
         pos_emb_gamma_projection_dim = 0,
-        use_gamma_for_sampling = True
+        use_gamma_for_sampling = True,
+        fix_qr = False
     ) -> None:
         super().__init__()
 
@@ -1978,6 +1979,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.n_dims = n_dims
         self.use_separate_gauss_embs = use_separate_gauss_embs
         self.use_gamma_for_sampling = use_gamma_for_sampling
+        self.fix_qr = fix_qr
 
         if not use_separate_gauss_embs:
             self.gaussian_embedder = GaussianLayer(K=K)
@@ -2142,9 +2144,14 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # decoded summed representation into gamma - this is S_n-invariant
         gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
         # [bs, 3, 3]
-        gamma = qr(
-            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)   # TODO: double transpose to fix the QR here, transpose in the input and output
-            )[0]
+        if self.fix_qr:
+            gamma = qr(
+                (self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)).transpose(1, 2)
+                )[0].transpose(1, 2)            
+        else:
+            gamma = qr(
+                self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims) 
+                )[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1))
 
         # Using gamma sampling 
