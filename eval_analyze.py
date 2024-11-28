@@ -35,6 +35,15 @@ def check_mask_correct(variables, node_mask):
         assert_correctly_masked(variable, node_mask)
 
 
+def convert_str_to_bool(string):
+    if string == "True":
+        return True
+    elif string == "False":
+        return False
+    else:
+        raise ValueError("String is not a boolean")
+
+
 def analyze_and_save(args, eval_args, device, generative_model,
                      nodes_dist, prop_dist, dataset_info, n_samples=10,
                      batch_size=10, save_to_xyz=False):
@@ -225,18 +234,18 @@ def main():
     # New arguments
 
     # Arguments for finding NLLs
-    parser.add_argument('--save_nlls_for_loaders', type=bool, default=False)
-    parser.add_argument('--find_top_nlls', type=bool, default=False)    
+    parser.add_argument('--save_nlls_for_loaders', type=str, default="False")
+    parser.add_argument('--find_top_nlls', type=str, default="False")    
     parser.add_argument('--top_k_nlls', type=int, default=10)
     parser.add_argument("--path_to_save_top_nll_indices", type=str, default=None)        
 
     # Arguments for sampling gamma on particular data indices
-    parser.add_argument('--gamma_on_indices', type=bool, default=False)
+    parser.add_argument('--gamma_on_indices', type=str, default="False")
     parser.add_argument("--gamma_indices_path", type=str, default=None)     
     parser.add_argument("--gamma_times_path", type=str, default=None)   
     parser.add_argument('--n_gamma_samples_for_x', type=int, default=1000)
     parser.add_argument("--gamma_samples_save_path", type=str, default=None)        
-    parser.add_argument('--only_find_gammas', type=bool, default=False)    
+    parser.add_argument('--only_find_gammas', type=str, default="False")
 
 
     eval_args, unparsed_args = parser.parse_known_args()
@@ -262,18 +271,18 @@ def main():
     print("Value for gamma sampling", args.use_gamma_for_sampling)
 
     # Arguments for saving nlls
-    args.save_nlls_for_loaders = eval_args.save_nlls_for_loaders
-    args.find_top_nlls = eval_args.find_top_nlls
+    args.save_nlls_for_loaders = convert_str_to_bool(eval_args.save_nlls_for_loaders)
+    args.find_top_nlls = convert_str_to_bool(eval_args.find_top_nlls)
     args.top_k_nlls = eval_args.top_k_nlls
     args.path_to_save_top_nll_indices = eval_args.path_to_save_top_nll_indices
 
     # Arguments for sampling gamma on particular data indices
-    args.gamma_on_indices = eval_args.gamma_on_indices
+    args.gamma_on_indices = convert_str_to_bool(eval_args.gamma_on_indices)
     args.gamma_indices_path = eval_args.gamma_indices_path
     args.gamma_times_path = eval_args.gamma_times_path
     args.n_gamma_samples_for_x = eval_args.n_gamma_samples_for_x
     args.gamma_samples_save_path = eval_args.gamma_samples_save_path
-    args.only_find_gammas = eval_args.only_find_gammas
+    args.only_find_gammas = convert_str_to_bool(eval_args.only_find_gammas)
 
     # Add other arguments
     args.cuda = not args.no_cuda and torch.cuda.is_available()
