@@ -248,14 +248,20 @@ def main():
     parser.add_argument('--only_find_gammas', type=str, default="False")
 
 
+    log_dir = "/vols/bitbucket/ashouritaklimi/symdiff"
     eval_args, unparsed_args = parser.parse_known_args()
     assert eval_args.model_path is not None
+    eval_args.model_path = f"{log_dir}/{eval_args.model_path}"
+    print("Model path is given by:", eval_args.model_path)
+
+
     with open(join(eval_args.model_path, 'args.pickle'), 'rb') as f:
         args = pickle.load(f)
 
     if eval_args.datadir is not None:
         print("Using different datadir!")
         args.datadir = eval_args.datadir
+
 
     # NOTE: CAREFUL with this -->
     if not hasattr(args, 'normalization_factor'):
