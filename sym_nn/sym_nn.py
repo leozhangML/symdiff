@@ -2145,6 +2145,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
         gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
         # [bs, 3, 3]
         if self.fix_qr:
+            print("Using fixed QR")
             gamma = qr(
                 (self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)).transpose(1, 2)
                 )[0].transpose(1, 2)            
