@@ -331,6 +331,7 @@ def main():
 
 
     # In GEOM-Drugs the validation partition is named 'val', not 'valid'.
+    print("Getting data")
     if args.dataset == 'geom':
         val_name = 'val'
         num_passes = 1

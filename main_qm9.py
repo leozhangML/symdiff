@@ -320,7 +320,7 @@ parser.add_argument("--t_fourier", action="store_true", help="time config for tr
 parser.add_argument("--freeze_model_parts", action="store_true", help="Whether to freeze the model parts")
 parser.add_argument("--model_part_to_freeze", type=str, default="", help="Which part of the model to freeze")
 parser.add_argument('--use_gamma_for_sampling', type=bool, default=True)
-parser.add_argument('--fix_qr', type=bool, default=True)
+parser.add_argument('--fix_qr', type=bool, default=False)
 
 # Getting the dataset
 args = parser.parse_args()
