@@ -314,7 +314,6 @@ def visualize(path, dataset_info, max_num=25, wandb=None, spheres_3d=False):
         atom_type = torch.argmax(one_hot, dim=1).numpy()
         dists = torch.cdist(positions.unsqueeze(0), positions.unsqueeze(0)).squeeze(0)
         dists = dists[dists > 0]
-        print("Average distance between atoms", dists.mean().item())
         plot_data3d(positions, atom_type, dataset_info=dataset_info, save_path=file[:-4] + '.png',
                     spheres_3d=spheres_3d)
 
@@ -345,7 +344,6 @@ def visualize_chain(path, dataset_info, wandb=None, spheres_3d=False,
     imgs = [imageio.imread(fn) for fn in save_paths]
     dirname = os.path.dirname(save_paths[0])
     gif_path = dirname + '/output.gif'
-    print(f'Creating gif with {len(imgs)} images')
     # Add the last frame 10 times so that the final result remains temporally.
     # imgs.extend([imgs[-1]] * 10)
     imageio.mimsave(gif_path, imgs, subrectangles=True)
@@ -387,7 +385,6 @@ def visualize_chain_uncertainty(
     imgs = [imageio.imread(fn) for fn in save_paths]
     dirname = os.path.dirname(save_paths[0])
     gif_path = dirname + '/output.gif'
-    print(f'Creating gif with {len(imgs)} images')
     # Add the last frame 10 times so that the final result remains temporally.
     # imgs.extend([imgs[-1]] * 10)
     imageio.mimsave(gif_path, imgs, subrectangles=True)

@@ -365,7 +365,6 @@ def analyze_stability_for_molecules(molecule_list, dataset_info):
     if use_rdkit:
         metrics = BasicMolecularMetrics(dataset_info)
         rdkit_metrics = metrics.evaluate(processed_list)
-        #print("Unique molecules:", rdkit_metrics[1])
         return validity_dict, rdkit_metrics
     else:
         return validity_dict, None

@@ -25,7 +25,6 @@ def sample_gammas(args, generative_model, nodes_dist, x, h, node_mask, edge_mask
         # [bs, n_nodes, 3]; dict of cat, int: [bs, n_nodes, num_classes] [bs, n_nodes, 1]; [bs, n_nodes, 1]; [bs, n_nodes^2]; [bs, n_nodes, context_nf]
         # Pass the data through the generative model (EnVariationalDiffusion)
         gamma = generative_model.sample_gamma(x, h, node_mask, edge_mask, context, return_time=False, t_fixed=t_fixed)
-        print("Shape of gamma in sample gammas: ", gamma.shape)
         return gamma
 
 

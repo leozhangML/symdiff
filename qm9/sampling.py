@@ -37,9 +37,7 @@ def rotate_chain(z):
     results.append(z)
     for i in range(n_steps):
         z_x = results[-1][:, :, :3]
-        # print(z_x.size(), Q.size())
         new_x = torch.matmul(z_x.view(-1, 3), Q.T).view(1, -1, 3)
-        # print(new_x.size())
         new_z = torch.cat([new_x, z_h], dim=2)
         results.append(new_z)
 
