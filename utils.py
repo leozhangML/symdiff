@@ -62,9 +62,9 @@ def gradient_clipping(args, flow, gradnorm_queue, clipping_type="queue"):
         else:
             gradnorm_queue.add(float(grad_norm))
 
-        if float(grad_norm) > max_grad_norm:
-            print(f'Clipped gradient with value {grad_norm:.1f} '
-                  f'while allowed {max_grad_norm:.1f}')
+        # if float(grad_norm) > max_grad_norm:
+        #     print(f'Clipped gradient with value {grad_norm:.1f} '
+        #           f'while allowed {max_grad_norm:.1f}')
         return grad_norm
 
     elif clipping_type == "norm":

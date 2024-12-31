@@ -100,7 +100,7 @@ def sample_chain(args, device, flow, n_tries, dataset_info, prop_dist=None):
             charges = torch.round(chain[:, :, -1:]).long()
 
             if mol_stable:
-                print('Found stable molecule to visualize :)')
+                # print('Found stable molecule to visualize :)')
                 break
             elif i == n_tries - 1:
                 print('Did not find stable molecule, showing last sample.')

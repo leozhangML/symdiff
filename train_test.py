@@ -192,7 +192,7 @@ def sample_different_sizes_and_save(model, nodes_dist, args, device, dataset_inf
         one_hot, charges, x, node_mask = sample(args, device, model, prop_dist=prop_dist,
                                                 nodesxsample=nodesxsample,
                                                 dataset_info=dataset_info)
-        print(f"Generated molecule: Positions {x[:-1, :, :]}")
+        # print(f"Generated molecule: Positions {x[:-1, :, :]}")
         vis.save_xyz_file(f'outputs/{args.exp_name}/epoch_{epoch}_{batch_id}/', one_hot, charges, x, dataset_info,
                           batch_size * counter, name='molecule')
 

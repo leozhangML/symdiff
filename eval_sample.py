@@ -80,8 +80,8 @@ def sample_only_stable_different_sizes_and_save(
         num_remaining_samples = n_samples - counter
 
         if mol_stable or num_remaining_attempts <= num_remaining_samples:
-            if mol_stable:
-                print('Found stable mol.')
+            # if mol_stable:
+            #     print('Found stable mol.')
             vis.save_xyz_file(
                 join(eval_args.model_path, 'eval/molecules/'),
                 one_hot[i:i+1], charges[i:i+1], x[i:i+1],

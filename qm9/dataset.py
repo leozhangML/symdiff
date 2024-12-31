@@ -25,7 +25,7 @@ def retrieve_dataloaders(cfg):
             dataset.convert_units(qm9_to_eV)  # multiply by units
 
         if filter_n_atoms is not None:
-            print("Retrieving molecules with only %d atoms" % filter_n_atoms)
+            # print("Retrieving molecules with only %d atoms" % filter_n_atoms)
             datasets = filter_atoms(datasets, filter_n_atoms)
 
         # Construct PyTorch dataloaders from datasets

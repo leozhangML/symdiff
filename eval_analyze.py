@@ -130,7 +130,7 @@ def test(args, flow_dp, nodes_dist, device, dtype, loader, partition='Test', num
                 # Subset the data if we are evaluating for indices
                 if gamma_on_indices:
                     # Check if any of our indices are in the current batch
-                    print("The current batch indices are", np.arange(current_idx, current_idx + batch_size))
+                    # print("The current batch indices are", np.arange(current_idx, current_idx + batch_size))
                     indices_in_batch = np.isin(np.arange(current_idx, current_idx + batch_size), eval_indices)
                     eval_indices_in_batch = np.isin(eval_indices, np.arange(current_idx, current_idx + batch_size))
                     if np.any(indices_in_batch):
@@ -138,13 +138,13 @@ def test(args, flow_dp, nodes_dist, device, dtype, loader, partition='Test', num
                         indices_in_batch = np.where(indices_in_batch)[0]
                         eval_indices_in_batch = np.where(eval_indices_in_batch)[0]
                         ts_in_batch = eval_times[eval_indices_in_batch]
-                        print("Indices in batch and current index", indices_in_batch, current_idx)
-                        print("Eval indices in batch", eval_indices_in_batch)   
+                        # print("Indices in batch and current index", indices_in_batch, current_idx)
+                        # print("Eval indices in batch", eval_indices_in_batch)   
 
                         # Reshape ts so that it is of shape (, 1) and so that it is on device
                         ts_in_batch = ts_in_batch.reshape(-1, 1)
                         ts_in_batch = torch.tensor(ts_in_batch, dtype=dtype, device=device)
-                        print("Shape of ts in batch", ts_in_batch.shape)                        
+                        # print("Shape of ts in batch", ts_in_batch.shape)                        
 
                         # Subset our data 
                         x = x[indices_in_batch]
@@ -155,10 +155,10 @@ def test(args, flow_dp, nodes_dist, device, dtype, loader, partition='Test', num
                             context = context[indices_in_batch]
 
                         # Print the shapes of x, h, node_mask and edge_mask
-                        print("Shape of x", x.shape)
-                        print("Shape of h", h['categorical'].shape)
-                        print("Shape of node_mask", node_mask.shape)
-                        print("Shape of edge_mask", edge_mask.shape)                                
+                        # print("Shape of x", x.shape)
+                        # print("Shape of h", h['categorical'].shape)
+                        # print("Shape of node_mask", node_mask.shape)
+                        # print("Shape of edge_mask", edge_mask.shape)                                
 
                     else:
                         # If none of the indices are in the batch, continue to the next batch
@@ -187,9 +187,9 @@ def test(args, flow_dp, nodes_dist, device, dtype, loader, partition='Test', num
 
 
                 # Flatten the vector of NLLs and add them to the list of all NLLs
-                print("Shape of nll in main", nll.shape)
+                # print("Shape of nll in main", nll.shape)
                 nll = nll.reshape(-1)
-                print("Shape of nll in main after rehspaing", nll.shape)
+                # print("Shape of nll in main after rehspaing", nll.shape)
 
                 if save_nlls:
                     all_nlls.append(nll.detach().cpu().numpy())
@@ -356,10 +356,10 @@ def main():
     elif args.only_find_gammas:
         indices = np.load(args.gamma_indices_path)
         times = np.load(args.gamma_times_path)
-        print("Shape of indices and times", indices.shape, times.shape)
+        # print("Shape of indices and times", indices.shape, times.shape) 
 
         times = torch.tensor(times)
-        print("Shape of times after conversion to torch", times.shape)
+        # print("Shape of times after conversion to torch", times.shape)
 
         # Get gammas and NLLs
         gammas_for_indices = test(args, generative_model, nodes_dist, device, dtype,
@@ -410,12 +410,12 @@ def main():
     # Saving the NLLS for the loaders as numpy arrays
     if args.save_nlls_for_loaders:
         all_test_nlls = np.concatenate(all_test_nlls)
-        print("Shape of all nlls after concatenation", all_test_nlls.shape)
+        # print("Shape of all nlls after concatenation", all_test_nlls.shape)
         np.save(join(eval_args.model_path, f'all_test_nlls.npy'), all_test_nlls)
         print(f"Saved all nlls to {join(eval_args.model_path, f'all_test_nlls.npy')}")
 
         all_test_ts = np.concatenate(all_test_ts)
-        print("Shape of all ts after concatenation", all_test_ts.shape)
+        # print("Shape of all ts after concatenation", all_test_ts.shape)
         np.save(join(eval_args.model_path, f'all_test_ts.npy'), all_test_ts)
         print(f"Saved all ts to {join(eval_args.model_path, f'all_test_ts.npy')}")
 

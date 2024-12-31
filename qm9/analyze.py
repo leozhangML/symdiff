@@ -173,7 +173,7 @@ def main_analyze_qm9(remove_h: bool, dataset_name='qm9', n_atoms=None):
     hist_dist = Histogram_cont(name='Histogram relative distances', ignore_zeros=True)
 
     for i, data in enumerate(dataloaders['train']):
-        print(i * cfg.batch_size)
+        # print(i * cfg.batch_size)
 
         # Histogram num_nodes
         num_nodes = torch.sum(data['atom_mask'], dim=1)

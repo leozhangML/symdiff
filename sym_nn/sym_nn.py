@@ -436,7 +436,7 @@ class SymDiffTransformer_dynamics(nn.Module):
 
         bs, n_nodes, _ = xh.shape
 
-        print("norm of original xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of original xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
@@ -452,7 +452,7 @@ class SymDiffTransformer_dynamics(nn.Module):
 
         g_inv_x = self.gamma_linear_in(g_inv_x)  # [bs, n_nodes, gamma_d_model]
 
-        print("norm of g_inv_x after gamma_lin_in: ", torch.mean(torch.norm(g_inv_x, dim=(1, 2))))
+        # print("norm of g_inv_x after gamma_lin_in: ", torch.mean(torch.norm(g_inv_x, dim=(1, 2))))
 
         att_mask = ~node_mask.bool()
 
@@ -462,11 +462,11 @@ class SymDiffTransformer_dynamics(nn.Module):
             src_key_padding_mask=att_mask.squeeze(-1), 
             memory_key_padding_mask=att_mask.squeeze(-1)
         )
-        print("norm of gamma before qr: ", torch.mean(torch.norm(gamma, dim=-1)) )
+        # print("norm of gamma before qr: ", torch.mean(torch.norm(gamma, dim=-1)) )
         gamma = qr(self.gamma_linear_out(gamma))[0]
         gamma = torch.bmm(gamma, g.transpose(2, 1))
 
-        print("norm of gamma: ", torch.mean(torch.norm(gamma, dim=-1)))
+        # print("norm of gamma: ", torch.mean(torch.norm(gamma, dim=-1)))
 
         # compute k
         gamma_inv_x = torch.bmm(x, gamma)
@@ -475,22 +475,22 @@ class SymDiffTransformer_dynamics(nn.Module):
         else:
             xh = torch.cat([gamma_inv_x, h, context], dim=-1)
 
-        print("norm of gamma to xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of gamma to xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         if self.t_fourier:
             xh = concat_t_emb(self.t_config, xh, t)
         else:
             xh = torch.cat([xh, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+in_node_nf+context_node_nf+1]
 
-        print("norm of xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         xh = self.k_linear_in(xh)
-        print("norm of xh after k_lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of xh after k_lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         xh = self.k(xh, src_key_padding_mask=att_mask.squeeze(-1))
         print("norm of xh after k: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         xh = self.k_linear_out(xh)  # NOTE: bias of nn.Linear
-        print("norm of xh after k_lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
-        print("norm of xh masked: ", torch.mean(torch.norm((1-node_mask)*xh, dim=(1, 2))))
+        # print("norm of xh after k_lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of xh masked: ", torch.mean(torch.norm((1-node_mask)*xh, dim=(1, 2))))
         
         if torch.isnan(xh).any():
             print("NANs")
@@ -507,7 +507,7 @@ class SymDiffTransformer_dynamics(nn.Module):
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
         gamma_x = torch.bmm(x, gamma.transpose(2, 1))
         xh = torch.cat([gamma_x, h], dim=-1)
-        print("norm of xh after com_free/end: ", torch.mean(torch.norm(xh, dim=(1, 2))), "\n")
+        # print("norm of xh after com_free/end: ", torch.mean(torch.norm(xh, dim=(1, 2))), "\n")
         return xh
 
 
@@ -1110,7 +1110,7 @@ class Transformer_dynamics(nn.Module):
 
         bs, n_nodes, _ = xh.shape
 
-        print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
@@ -1118,7 +1118,7 @@ class Transformer_dynamics(nn.Module):
 
         x_0 = x * 1.
 
-        print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         if context is None:
             xh = torch.cat([x, h], dim=-1)
@@ -1129,17 +1129,17 @@ class Transformer_dynamics(nn.Module):
             xh = concat_t_emb(self.t_config, xh, t)
         else:
             xh = torch.cat([xh, t.expand(bs, n_nodes, -1)], dim=-1)  # [bs, n_nodes, n_dims+1]
-        print("initial xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("initial xh with t: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         xh = self.linear_in(xh)
-        print("xh after lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh after lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
  
         att_mask = ~node_mask.bool()
         xh = self.model(xh, src_key_padding_mask=att_mask.squeeze(-1))
-        print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         xh = self.linear_out(xh) * node_mask 
-        print("xh after lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh after lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
@@ -1150,7 +1150,7 @@ class Transformer_dynamics(nn.Module):
 
         xh = torch.cat([x, h], dim=-1)
         
-        print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         return xh
 
@@ -1205,19 +1205,19 @@ class DiT_dynamics(nn.Module):
         # return [bs, n_nodes, dims]
 
         bs, n_nodes, _ = xh.shape
-        print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("initial xh: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
         x = remove_mean_with_mask(x, node_mask)
         x_0 = x * 1.
-        print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("initial xh with mean removed: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         assert context is None
         xh = torch.cat([x, h], dim=-1)
 
         xh = self.model(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask
-        print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh after transformer: ", torch.mean(torch.norm(xh, dim=(1, 2))))
 
         x = xh[:, :, :self.n_dims] 
         h = xh[:, :, self.n_dims:]
@@ -1228,7 +1228,7 @@ class DiT_dynamics(nn.Module):
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
         xh = torch.cat([x, h], dim=-1)
-        print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("xh with com_free: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         #assert_correctly_masked(xh, node_mask)
 
         return xh

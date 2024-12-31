@@ -314,7 +314,7 @@ def visualize(path, dataset_info, max_num=25, wandb=None, spheres_3d=False):
         atom_type = torch.argmax(one_hot, dim=1).numpy()
         dists = torch.cdist(positions.unsqueeze(0), positions.unsqueeze(0)).squeeze(0)
         dists = dists[dists > 0]
-        print("Average distance between atoms", dists.mean().item())
+        # print("Average distance between atoms", dists.mean().item())
         plot_data3d(positions, atom_type, dataset_info=dataset_info, save_path=file[:-4] + '.png',
                     spheres_3d=spheres_3d)
 
