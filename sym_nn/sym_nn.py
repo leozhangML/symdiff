@@ -2157,10 +2157,10 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # Using gamma sampling 
         if self.use_gamma_for_sampling:
             gamma_inv_x = torch.bmm(x, gamma.clone())
-            print("Using gamma")
+            # print("Using gamma")
         else:
             gamma_inv_x = x
-            print("Not using gamma")
+            # print("Not using gamma")
 
         xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
 
@@ -2178,7 +2178,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         # Whether to use gammas at sampling or not
         if self.use_gamma_for_sampling:
-            print("Using gamma.")
+            # print("Using gamma.")
             x = torch.bmm(x, gamma.transpose(2, 1))
             
         xh = torch.cat([x, h], dim=-1)

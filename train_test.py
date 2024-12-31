@@ -87,11 +87,11 @@ def train_epoch(args, loader, epoch, model, model_dp, model_ema, ema, device, dt
         if args.print_grad_norms:
             model.dynamics.print_gradient_norm()
 
-        if i % args.n_report_steps == 0:
-            print(f"\rEpoch: {epoch}, iter: {i}/{n_iterations}, "
-                  f"Loss {loss.item():.2f}, NLL: {nll.item():.2f}, "
-                  f"RegTerm: {reg_term.item():.1f}, "
-                  f"GradNorm: {grad_norm:.1f}")
+        # if i % args.n_report_steps == 0:
+        #     print(f"\rEpoch: {epoch}, iter: {i}/{n_iterations}, "
+        #           f"Loss {loss.item():.2f}, NLL: {nll.item():.2f}, "
+        #           f"RegTerm: {reg_term.item():.1f}, "
+        #           f"GradNorm: {grad_norm:.1f}")
         nll_epoch.append(nll.item())
         if (epoch % args.test_epochs == 0) and (i % args.visualize_every_batch == 0) and not (epoch == 0 and i == 0):
             start = time.time()
