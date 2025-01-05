@@ -355,7 +355,7 @@ class EnVariationalDiffusion(torch.nn.Module):
     def phi(self, x, t, node_mask, edge_mask, context, return_gamma_only=False):
         if return_gamma_only:
             net_out, gamma = self.dynamics._forward(t, x, node_mask, edge_mask, context, return_gamma=True)
-            print("Shape of gamma that is being outputted by self.phi in EVD", gamma.shape)
+            # print("Shape of gamma that is being outputted by self.phi in EVD", gamma.shape)
             return gamma
         
         if self.com_free:
@@ -687,7 +687,7 @@ class EnVariationalDiffusion(torch.nn.Module):
             t_int = t_fixed
         else:
             t_int = torch.randint(lowest_t, self.T + 1, size=(x.size(0), 1), device=x.device).float()  # [bs, 1] from [0, T]
-            print("Shape of t_int in compute_loss is: ", t_int.shape)
+            # print("Shape of t_int in compute_loss is: ", t_int.shape)
 
         s_int = t_int - 1
         t_is_zero = (t_int == 0).float()  # Important to compute log p(x | z0)  [bs, 1] of 0, 1

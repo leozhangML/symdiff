@@ -487,7 +487,7 @@ class SymDiffTransformer_dynamics(nn.Module):
         xh = self.k_linear_in(xh)
         # print("norm of xh after k_lin_in: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         xh = self.k(xh, src_key_padding_mask=att_mask.squeeze(-1))
-        print("norm of xh after k: ", torch.mean(torch.norm(xh, dim=(1, 2))))
+        # print("norm of xh after k: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         xh = self.k_linear_out(xh)  # NOTE: bias of nn.Linear
         # print("norm of xh after k_lin_out: ", torch.mean(torch.norm(xh, dim=(1, 2))))
         # print("norm of xh masked: ", torch.mean(torch.norm((1-node_mask)*xh, dim=(1, 2))))
