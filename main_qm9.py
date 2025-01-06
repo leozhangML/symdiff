@@ -182,6 +182,8 @@ parser.add_argument("--noise_std", type=float, default=1.0, help="config for DiT
 
 parser.add_argument("--mlp_type", type=str, default="mlp", help="config for DiT_DiTGaussian")
 
+parser.add_argument("--fix_qr", action="store_true", help="config for DiT_DiTGaussian")  # new
+
 # -------- Deepsets DiTGaussian args -------- #
 
 parser.add_argument("--pos_emb_gamma_size", type=int, default=32, help="config for Deepsets")

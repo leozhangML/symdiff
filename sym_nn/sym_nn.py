@@ -163,7 +163,9 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         n_dims: int = 3,
         device: str = "cpu",
-        use_gamma_for_sampling: bool = True
+        use_gamma_for_sampling: bool = True,
+
+        fix_qr: bool = False
     ) -> None:
         super().__init__()
 
@@ -186,6 +188,8 @@ class DiT_DitGaussian_dynamics(nn.Module):
         self.noise_std = noise_std
 
         self.enc_concat_h = enc_concat_h  # NOTE: not used for now
+
+        self.fix_qr = fix_qr
 
         if enc_concat_h:
             self.gamma_enc_input_dim = n_dims + self.in_node_nf + hidden_size-xh_hidden_size + noise_dims
@@ -263,9 +267,13 @@ class DiT_DitGaussian_dynamics(nn.Module):
         # decoded summed representation into gamma - this is S_n-invariant
         gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
         # [bs, 3, 3]
-        gamma = qr(
-            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
-            )[0]
+        if self.fix_qr:
+            gamma = qr(self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims).transpose(1, 2))[0].transpose(1, 2)
+        else:
+            gamma = qr(
+                self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)
+                )[0]
+
         gamma = torch.bmm(gamma, g.transpose(2, 1))
 
         return gamma
@@ -1827,7 +1835,7 @@ class ScalarsDiT_PE_DitGaussian_dynamics(nn.Module):
             f_xx_t, t.squeeze(-1), node_mask.squeeze(-1))
 
         base_gamma = torch.bmm(base_gamma.transpose(1, 2), x)  # [bs, 3, 3]
-        base_gamma = qr(base_gamma)[0]
+        base_gamma = qr(base_gamma)[0]  # TODO: change this to be equivariant
 
         return base_gamma
 

@@ -10,7 +10,7 @@
 # Using thet cluster srf_gpu_01 and node 6
 #SBATCH --cluster=srf_gpu_01
 #SBATCH --partition=high-bigbayes-test
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:Ampere_A40:1
 
 # Change if you know what doing (look at examples, notes)
 #SBATCH --cpus-per-task=4
@@ -19,7 +19,7 @@
 #NOTSBATCH --nodelist=zizgpu06.cpu.stats.ox.ac.uk
 
 # Make sure RAM Is enough otherwise it will crash
-#SBATCH --time=12-00:00:00  
+#SBATCH --time=12-00:00:00
 #SBATCH --mem=42G  
 
 # Don't change unless you know why (look at examples and notes for more information)
@@ -48,7 +48,7 @@ echo "SLURM_JOBID: " $SLURM_JOBID
 echo "bruh"
 date -u
 
-python main_qm9.py --exp_name DiT_DiTGaussian_random_init --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
+python main_qm9.py --exp_name DiT_DiTGaussian_random_init_fix_qr --model dit_dit_gaussian_dynamics --dataset qm9 --datadir /data/zizgpu06/not-backed-up/nvme00/lezhang \
                    --diffusion_noise_precision 1e-5 --diffusion_steps 1000 --diffusion_loss_type l2 --diffusion_noise_schedule polynomial_2 \
                    --n_epochs 6 --batch_size 256 --lr 2e-4 --com_free --clipping_type norm --max_grad_norm 2.0 --ema_decay 0.9999 \
                    --weight_decay 1e-12 --use_amsgrad --normalize_factors [1,4,10] \
@@ -58,7 +58,8 @@ python main_qm9.py --exp_name DiT_DiTGaussian_random_init --model dit_dit_gaussi
                    --enc_hidden_size 128 --enc_depth 8 --enc_num_heads 4 --enc_mlp_ratio 4.0 --dec_hidden_features 64 --gamma_mlp_dropout 0.0 \
                    --hidden_size 384 --depth 12 --num_heads 6 --mlp_ratio 4.0 --mlp_dropout 0.0 \
                    --noise_dims 3 --noise_std 1.0 \
-                   --save_model_at_init
+                   --save_model_at_init \
+                   --fix_qr
 
 date -u
 
