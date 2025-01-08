@@ -36,3 +36,4 @@ run.sh
 *.sh
 slurm/
 notes/
+plots/
