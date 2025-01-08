@@ -341,7 +341,7 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 out_channels=n_dims+in_node_nf+context_node_nf, x_scale=0.0, 
                 hidden_size=hidden_size, depth=depth, 
                 num_heads=num_heads, mlp_ratio=mlp_ratio,
-                mlp_dropout=mlp_dropout, 
+                mlp_dropout=mlp_dropout,
                 use_fused_attn=True, x_emb="identity",
                 mlp_type=mlp_type
                 )
@@ -374,7 +374,6 @@ class DiT_DitGaussian_dynamics(nn.Module):
 
         self.device = device
 
-
         def _basic_init(module):
             if isinstance(module, nn.Linear):
                 torch.nn.init.xavier_uniform_(module.weight)
@@ -388,21 +387,82 @@ class DiT_DitGaussian_dynamics(nn.Module):
     def forward(self):
         raise NotImplementedError
 
-    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None, return_gamma=False):
-        # t: [bs, 1]
-        # xh: [bs, n_nodes, dims]
-        # node_mask: [bs, n_nodes, 1]
-        # context: [bs, n_nodes, context_node_nf]
-        # return [bs, n_nodes, dims]
+    def base_gamma(self, t, x):
+        """Samples from the base gamma kernel."""
+        return orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+
+    def gamma_backbone(self, t, x, node_mask):
+        """Samples from the backbone of gamma."""
+        bs, n_nodes, _ = x.shape
+
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        pos_emb_gamma = self.gaussian_embedder_gamma(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb_gamma = torch.sum(self.pos_embedder_gamma(pos_emb_gamma), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
+        if self.noise_dims > 0:
+            x = torch.cat([
+                x, 
+                node_mask * self.noise_std * torch.randn(
+                    bs, n_nodes, self.noise_dims, device=self.device)
+                ], dim=-1)
+
+        x = torch.cat([x, pos_emb_gamma], dim=-1)
+
+        # [bs, n_nodes, hidden_size]
+        gamma = node_mask * self.gamma_enc(
+            x, t.squeeze(-1), node_mask.squeeze(-1), 
+            use_final_layer=False
+            )
+
+        # decoded summed representation into gamma - this is S_n-invariant
+        gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
+        # [bs, 3, 3] - correct direction of QR for right equivariance
+        gamma = qr(
+            self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims).transpose(1, 2)
+            )[0].transpose(1, 2)            
+
+        return gamma
+
+    def gamma(self, t, x, node_mask):
+        """Samples from the overall gamma."""
+        base_gamma = self.base_gamma(t, x)
+        g_inv_x = torch.bmm(x.clone(), base_gamma.clone())  # as x is represented row-wise
+        gamma = self.gamma_backbone(t, g_inv_x, node_mask)
+        gamma = torch.bmm(gamma, base_gamma.transpose(1, 2))
+        return gamma
+
+    def k_backbone(self, t, x, h, node_mask):
+        """Computes from the backbone of the model."""
+        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
+        pos_emb_k = self.gaussian_embedder_k(x, node_mask)  # [bs, n_nodes, n_nodes, K]
+        pos_emb_k = torch.sum(self.pos_embedder_k(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
+
+        xh = self.xh_embedder(torch.cat([x, h], dim=-1))
+        xh = node_mask * torch.cat([xh, pos_emb_k], dim=-1)
+        xh = node_mask * self.backbone(xh, t.squeeze(-1), node_mask.squeeze(-1))
+
+        return xh
+
+    def _forward(self, t, xh, node_mask, edge_mask, context, gamma=None):
+        """Samples from the overall kernel.
+
+        Args: 
+            t: [bs, 1]
+            xh: [bs, n_nodes, dims+in_nodes_nf]
+            node_mask: [bs, n_nodes, 1]
+            context: [bs, n_nodes, context_node_nf]
+            gamma: Optional[Array]
+        Returns:
+            xh: [bs, n_nodes, dims+in_nodes_nf]
+        """
 
         assert context is None
-
-        bs, n_nodes, _ = xh.shape
 
         x = xh[:, :, :self.n_dims]
         h = xh[:, :, self.n_dims:]
 
         x = remove_mean_with_mask(x, node_mask)
+
         if not self.args.com_free:
             assert gamma is not None
             # Karras et al. (2022) scaling
@@ -411,86 +471,21 @@ class DiT_DitGaussian_dynamics(nn.Module):
                 torch.exp(gamma[1]).unsqueeze(-1)
                 )
 
-        g = orthogonal_haar(dim=self.n_dims, target_tensor=x)  # [bs, 3, 3]
+        gamma = self.gamma(t, x, node_mask)
+        g_inv_x = torch.bmm(x, gamma)
+        xh = self.k_backbone(t, g_inv_x, h, node_mask)
 
-        N = torch.sum(node_mask, dim=1, keepdims=True)  # [bs, 1, 1]
-        if not self.use_separate_gauss_embs:
-            pos_emb = self.gaussian_embedder(x, node_mask)  # [bs, n_nodes, n_nodes, K]
-            pos_emb = torch.sum(self.pos_embedder(pos_emb), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
-        else:
-            pos_emb_gamma = self.gaussian_embedder_gamma(x, node_mask)  # [bs, n_nodes, n_nodes, K]
-            pos_emb_gamma = torch.sum(self.pos_embedder_gamma(pos_emb_gamma), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
-
-            pos_emb_k = self.gaussian_embedder_k(x, node_mask)  # [bs, n_nodes, n_nodes, K]
-            pos_emb_k = torch.sum(self.pos_embedder_k(pos_emb_k), dim=-2) / N  # [bs, n_nodes, hidden_size-xh_hidden_size]
-
-        g_inv_x = torch.bmm(x.clone(), g.clone())  # as x is represented row-wise
-
-        if self.enc_concat_h:
-            g_inv_x = torch.cat([g_inv_x, h.clone()], dim=-1)
-        if self.noise_dims > 0:
-            g_inv_x = torch.cat([
-                g_inv_x, 
-                node_mask * self.noise_std * torch.randn(
-                    bs, n_nodes, self.noise_dims, device=self.device
-                    )
-                ], dim=-1)
-
-        if not self.use_separate_gauss_embs:
-            g_inv_x = torch.cat([g_inv_x, pos_emb.clone()], dim=-1)
-        else:
-            g_inv_x = torch.cat([g_inv_x, pos_emb_gamma.clone()], dim=-1)
-
-        # [bs, n_nodes, hidden_size]
-        gamma = node_mask * self.gamma_enc(
-            g_inv_x, t.squeeze(-1), node_mask.squeeze(-1), 
-            use_final_layer=False
-            )
-
-        # decoded summed representation into gamma - this is S_n-invariant
-        gamma = torch.sum(gamma, dim=1) / N.squeeze(-1)  # [bs, hidden_size] 
-        # [bs, 3, 3]
-        if self.fix_qr:
-            gamma = qr(
-                (self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims)).transpose(1, 2)
-                )[0].transpose(1, 2)            
-        else:
-            gamma = qr(
-                self.gamma_dec(gamma).reshape(-1, self.n_dims, self.n_dims) 
-                )[0]
-        gamma = torch.bmm(gamma, g.transpose(2, 1))
-
-        # Using gamma sampling 
-        if self.use_gamma_for_sampling:
-            gamma_inv_x = torch.bmm(x, gamma.clone())
-        else:
-            gamma_inv_x = x
-
-        xh = self.xh_embedder(torch.cat([gamma_inv_x, h], dim=-1))
-
-        if not self.use_separate_gauss_embs:
-            xh = torch.cat([xh, pos_emb], dim=-1) * node_mask
-        else:
-            xh = torch.cat([xh, pos_emb_k], dim=-1) * node_mask
-
-        xh = self.k(xh, t.squeeze(-1), node_mask.squeeze(-1)) * node_mask  # use DiT
         x = xh[:, :, :self.n_dims] 
         h = xh[:, :, self.n_dims:]
 
         if self.args.com_free:
             x = remove_mean_with_mask(x, node_mask)  # k: U -> U
 
-        # Whether to use gammas at sampling or not
-        if self.use_gamma_for_sampling:
-            print("Using gamma.")
-            x = torch.bmm(x, gamma.transpose(2, 1))
-            
+        x = torch.bmm(x, gamma.transpose(1, 2))
         xh = torch.cat([x, h], dim=-1)
+
         assert_correctly_masked(xh, node_mask)
     
-        # Output
-        if return_gamma:
-            return xh, gamma
         return xh
 
     def print_parameter_count(self):
