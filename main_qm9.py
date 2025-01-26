@@ -330,6 +330,7 @@ atom_decoder = dataset_info['atom_decoder']
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
+print("Using device: ", device)
 dtype = torch.float32
 
 
