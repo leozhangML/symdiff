@@ -34,3 +34,4 @@ test.py
 view_data.ipynb
 run.sh
 *.sh
+plots/
